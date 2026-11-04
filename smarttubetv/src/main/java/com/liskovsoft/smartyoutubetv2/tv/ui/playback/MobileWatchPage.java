@@ -1,14 +1,10 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.playback;
 
-import android.app.Activity;
-import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
-import android.os.Handler;
-import android.os.Looper;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
@@ -16,11 +12,7 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
-import android.widget.ImageButton;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.PopupMenu;
-import android.widget.SeekBar;
 import android.widget.TextView;
 
 import androidx.leanback.widget.ObjectAdapter;
@@ -30,12 +22,9 @@ import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileVideoFeed;
 
-import java.util.Locale;
-import java.util.concurrent.TimeUnit;
-
-/** Single native touch transport over the same ExoPlayer engine.
- * The original Leanback transport is hidden ONLY on mobile. Video playback,
- * channel actions, playback settings and queue remain backed by the original presenter.
+/**
+ * Mobile watch layout. The ORIGINAL PlaybackFragment controls are the only
+ * player transport. No second overlay, buttons, progress bar or timer.
  */
 final class MobileWatchPage {
     private final PlaybackActivity activity;
@@ -43,25 +32,8 @@ final class MobileWatchPage {
     private final LinearLayout screen;
     private final FrameLayout videoFrame;
     private final FrameLayout below;
-    private final FrameLayout shade;
-    private final LinearLayout controls;
-    private final TextView title, metadata, author, time;
-    private final ImageButton toggle, expand;
-    private final SeekBar seek;
+    private final TextView title, metadata, author;
     private final MobileVideoFeed feed;
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private boolean tracking;
-    private boolean controlsShown = true;
-    private boolean stopped;
-
-    private final Runnable autoHide = () -> setControlsShown(false);
-    private final Runnable refresh = new Runnable() {
-        @Override public void run() {
-            if (stopped) return;
-            updatePlayback();
-            handler.postDelayed(this, 450);
-        }
-    };
 
     MobileWatchPage(PlaybackActivity activity, PlaybackFragment player) {
         this.activity = activity;
@@ -70,91 +42,10 @@ final class MobileWatchPage {
         videoFrame = activity.findViewById(R.id.mobile_player_frame);
         below = activity.findViewById(R.id.mobile_watch_below);
         if (screen == null || videoFrame == null || below == null)
-            throw new IllegalStateException("Mobile watch layout not found");
+            throw new IllegalStateException("Missing mobile watch containers");
 
-        shade = new FrameLayout(activity);
-        shade.setBackgroundColor(0x55000000);
-        shade.setClickable(true);
-        shade.setContentDescription("Tap to show or hide playback controls");
-        shade.setOnClickListener(v -> setControlsShown(!controlsShown));
-        // Keep the legacy mobile overlay detached. Only the original
-        // PlaybackFragment/Leanback control menu is visible and touch-active.
-        // The portrait watch page below remains intact.
-
-        controls = new LinearLayout(activity);
-        controls.setOrientation(LinearLayout.VERTICAL);
-        FrameLayout.LayoutParams overlayParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
-        shade.addView(controls, overlayParams);
-
-        LinearLayout top = new LinearLayout(activity);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        top.setPadding(dp(4), dp(1), dp(4), 0);
-        controls.addView(top, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(48)));
-        addIcon(top, R.drawable.mobile_ic_back, "Back", () -> activity.onBackPressed());
-        View spacer = new View(activity);
-        top.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
-        addIcon(top, R.drawable.mobile_ic_more, "Playback settings", this::openSettings);
-
-        LinearLayout center = new LinearLayout(activity);
-        center.setGravity(Gravity.CENTER);
-        addIcon(center, R.drawable.mobile_ic_prev, "Previous video", player::skipToPrevious);
-        toggle = icon(R.drawable.mobile_ic_pause, "Pause");
-        toggle.setOnClickListener(v -> {
-            player.setPlayWhenReady(!player.getPlayWhenReady());
-            updatePlayback();
-            postponeHide();
-        });
-        center.addView(toggle, new LinearLayout.LayoutParams(dp(64), dp(64)));
-        addIcon(center, R.drawable.mobile_ic_next, "Next video", player::skipToNext);
-        controls.addView(center, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
-
-        LinearLayout lower = new LinearLayout(activity);
-        lower.setOrientation(LinearLayout.VERTICAL);
-        lower.setPadding(dp(10), 0, dp(10), dp(2));
-        controls.addView(lower, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(60)));
-
-        LinearLayout labels = new LinearLayout(activity);
-        labels.setGravity(Gravity.CENTER_VERTICAL);
-        time = new TextView(activity);
-        time.setTextSize(12);
-        time.setTextColor(Color.WHITE);
-        time.setText("0:00 / --:--");
-        labels.addView(time, new LinearLayout.LayoutParams(0, dp(25), 1f));
-        expand = icon(R.drawable.mobile_ic_fullscreen, "Toggle fullscreen");
-        expand.setOnClickListener(v -> toggleFullscreen());
-        labels.addView(expand, new LinearLayout.LayoutParams(dp(48), dp(36)));
-        lower.addView(labels);
-
-        seek = new SeekBar(activity);
-        seek.setMax(1000);
-        seek.setContentDescription("Video progress and seeking");
-        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onStartTrackingTouch(SeekBar bar) {
-                tracking = true;
-                handler.removeCallbacks(autoHide);
-            }
-            @Override public void onProgressChanged(SeekBar bar, int position, boolean user) {
-                if (user) {
-                    long duration = duration();
-                    time.setText(duration > 0
-                            ? format(Math.round(duration * position / 1000d)) + " / " + format(duration)
-                            : "LIVE");
-                }
-            }
-            @Override public void onStopTrackingTouch(SeekBar bar) {
-                long duration = duration();
-                if (duration > 0) player.setPositionMs(Math.round(duration * bar.getProgress() / 1000d));
-                tracking = false;
-                postponeHide();
-            }
-        });
-        lower.addView(seek, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(20)));
-
+        // Do not add any view on top of the playing video. The original
+        // SmartTube playback controls receive native touch gestures directly.
         LinearLayout description = new LinearLayout(activity);
         description.setOrientation(LinearLayout.VERTICAL);
         description.setPadding(dp(14), dp(12), dp(14), dp(8));
@@ -242,10 +133,9 @@ final class MobileWatchPage {
         feed.setOnVideoVisible(player::onMobileSuggestionVisible);
         description.addView(feed.getView(), new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+
         videoFrame.post(this::applyLayout);
         onVideoChanged(player.getVideo());
-        resume();
-        postponeHide();
     }
 
     private int dp(float value) { return MobileUi.dp(activity, value); }
@@ -272,36 +162,6 @@ final class MobileWatchPage {
         row.addView(pill, params);
         pill.setOnClickListener(v -> callback.run());
     }
-    private ImageButton icon(int drawable, String description) {
-        ImageButton button = new ImageButton(activity);
-        button.setImageResource(drawable);
-        button.setColorFilter(Color.WHITE);
-        button.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        button.setPadding(dp(12), dp(12), dp(12), dp(12));
-        button.setBackgroundColor(Color.TRANSPARENT);
-        button.setContentDescription(description);
-        return button;
-    }
-    private void addIcon(LinearLayout row, int image, String name, Runnable callback) {
-        ImageButton button = icon(image, name);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(56), dp(52));
-        row.addView(button, params);
-        button.setOnClickListener(v -> { callback.run(); postponeHide(); });
-    }
-
-    private void openSettings() {
-        ImageButton button = (ImageButton) ((LinearLayout)controls.getChildAt(0)).getChildAt(2);
-        PopupMenu menu = new PopupMenu(activity, button);
-        menu.getMenu().add("Quality").setOnMenuItemClickListener(i -> action(R.id.lb_control_high_quality));
-        menu.getMenu().add("Playback speed").setOnMenuItemClickListener(i -> action(R.id.action_video_speed));
-        menu.getMenu().add("Subtitles").setOnMenuItemClickListener(i -> action(R.id.lb_control_closed_captioning));
-        menu.getMenu().add("Repeat mode").setOnMenuItemClickListener(i -> action(R.id.action_repeat));
-        menu.getMenu().add("Video information").setOnMenuItemClickListener(i -> action(R.id.action_info));
-        menu.show();
-        postponeHide();
-    }
-    private boolean action(int id) { player.mobileAction(id); return true; }
-
     void onVideoChanged(Video video) {
         if (video == null) return;
         title.setText(video.getTitleFull() != null ? video.getTitleFull() : video.getTitle());
@@ -309,62 +169,18 @@ final class MobileWatchPage {
         metadata.setText(second == null ? "" : second);
         String name = video.getAuthor();
         author.setText(name != null ? name : "Channel");
-        setControlsShown(true);
-        postponeHide();
     }
-    void onSuggestions(ObjectAdapter rows) { feed.scheduleRows(rows); }
-
-    private long duration() {
-        long ms = player.getDurationMs();
-        return ms > 0 && ms < TimeUnit.DAYS.toMillis(10) ? ms : 0;
+    void onSuggestions(ObjectAdapter rows) {
+        feed.scheduleRows(rows);
     }
-    private String format(long ms) {
-        long s = Math.max(0, ms / 1000);
-        if (s >= 3600) return String.format(Locale.US, "%d:%02d:%02d",
-                s / 3600, (s / 60) % 60, s % 60);
-        return String.format(Locale.US, "%d:%02d", s / 60, s % 60);
-    }
-    private void updatePlayback() {
-        if (player == null || seek == null) return;
-        try {
-            boolean playing = player.getPlayWhenReady();
-            toggle.setImageResource(playing ? R.drawable.mobile_ic_pause : R.drawable.mobile_ic_play);
-            toggle.setContentDescription(playing ? "Pause" : "Play");
-            if (tracking) return;
-            long duration = duration();
-            long position = Math.max(0, player.getPositionMs());
-            seek.setEnabled(duration > 0);
-            if (duration > 0) {
-                seek.setProgress((int)Math.min(1000, 1000d * position / duration));
-                time.setText(format(position) + " / " + format(duration));
-            } else {
-                time.setText("LIVE");
-                seek.setProgress(0);
-            }
-        } catch (RuntimeException ignored) {
-            // Media source may be replacing the player during an autoplay transition.
-        }
-    }
-
-    void setControlsShown(boolean visible) {
-        controlsShown = visible;
-        controls.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
-        shade.setBackgroundColor(visible ? 0x66000000 : Color.TRANSPARENT);
-        if (visible) postponeHide();
-    }
-    private void postponeHide() {
-        handler.removeCallbacks(autoHide);
-        if (!tracking && !stopped) handler.postDelayed(autoHide, 5000);
-    }
-
     void applyLayout() {
         if (videoFrame.getParent() == null) return;
         boolean landscape = activity.getResources().getConfiguration().orientation ==
                 Configuration.ORIENTATION_LANDSCAPE;
-        LinearLayout.LayoutParams videoParams = (LinearLayout.LayoutParams) videoFrame.getLayoutParams();
+        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) videoFrame.getLayoutParams();
         if (landscape) {
-            videoParams.height = 0;
-            videoParams.weight = 1f;
+            params.height = 0;
+            params.weight = 1f;
             below.setVisibility(View.GONE);
             activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
             activity.getWindow().getDecorView().setSystemUiVisibility(
@@ -373,8 +189,8 @@ final class MobileWatchPage {
         } else {
             int width = screen.getWidth() > 0 ? screen.getWidth()
                     : activity.getResources().getDisplayMetrics().widthPixels;
-            videoParams.height = Math.round(width * 9f / 16f);
-            videoParams.weight = 0;
+            params.height = Math.round(width * 9f / 16f);
+            params.weight = 0;
             below.setVisibility(View.VISIBLE);
             activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN |
                     WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
@@ -383,26 +199,18 @@ final class MobileWatchPage {
             activity.getWindow().getDecorView().setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         }
-        videoFrame.setLayoutParams(videoParams);
+        videoFrame.setLayoutParams(params);
     }
-
     private void toggleFullscreen() {
         boolean landscape = activity.getResources().getConfiguration().orientation ==
                 Configuration.ORIENTATION_LANDSCAPE;
         activity.setRequestedOrientation(landscape
                 ? ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                 : ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-        postponeHide();
     }
 
-    void resume() {
-        stopped = false;
-        handler.removeCallbacks(refresh);
-        handler.post(refresh);
-    }
-    void stop() {
-        stopped = true;
-        handler.removeCallbacks(refresh);
-        handler.removeCallbacks(autoHide);
-    }
+    // All player-control lifecycle operations belong to the native fragment.
+    void resume() {}
+    void stop() {}
+    void setControlsShown(boolean visible) { player.showOverlay(visible); }
 }
