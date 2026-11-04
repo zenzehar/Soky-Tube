@@ -34,6 +34,8 @@ final class MobileWatchPage {
     private final FrameLayout below;
     private final TextView title, metadata, author;
     private final MobileVideoFeed feed;
+    private final LinearLayout chapterSection;
+    private final LinearLayout chapterList;
     private final MobileTouchPlayerControls touchControls;
     private boolean isShortVideo;
     private boolean inPip;
@@ -51,6 +53,7 @@ final class MobileWatchPage {
         // playback engine; the oversized TV transport is hidden on mobile.
         touchControls = new MobileTouchPlayerControls(activity, player, videoFrame);
         touchControls.setSponsorSegments(player.getMobileSponsorSegments());
+        touchControls.setChapters(player.getMobileChapters());
         LinearLayout description = new LinearLayout(activity);
         description.setOrientation(LinearLayout.VERTICAL);
         description.setPadding(dp(14), dp(12), dp(14), dp(8));
@@ -151,6 +154,28 @@ final class MobileWatchPage {
         commentsCard.setContentDescription("Open video comments");
         commentsCard.setOnClickListener(v -> player.openMobileComments());
 
+        // True YouTube chapter partitions are selectable from the watch page.
+        // Hide the entire row for videos without authored chapters.
+        chapterSection = new LinearLayout(activity);
+        chapterSection.setOrientation(LinearLayout.VERTICAL);
+        chapterSection.setVisibility(View.GONE);
+        description.addView(chapterSection, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        TextView chapterHeading = new TextView(activity);
+        chapterHeading.setText("Chapters");
+        chapterHeading.setTextSize(17);
+        chapterHeading.setTextColor(0xFF171717);
+        chapterHeading.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        chapterHeading.setPadding(0,dp(14),0,dp(9));
+        chapterSection.addView(chapterHeading);
+        HorizontalScrollView chapterScroll = new HorizontalScrollView(activity);
+        chapterScroll.setHorizontalScrollBarEnabled(false);
+        chapterList = new LinearLayout(activity);
+        chapterList.setGravity(Gravity.CENTER_VERTICAL);
+        chapterScroll.addView(chapterList);
+        chapterSection.addView(chapterScroll);
+
         TextView nextHeader = new TextView(activity);
         nextHeader.setText("Up next");
         nextHeader.setTextColor(0xFF171717);
@@ -176,6 +201,7 @@ final class MobileWatchPage {
         });
         videoFrame.post(this::applyLayout);
         onVideoChanged(player.getVideo());
+        setChapters(player.getMobileChapters());
     }
 
     private int dp(float value) { return MobileUi.dp(activity, value); }
@@ -212,8 +238,44 @@ final class MobileWatchPage {
         boolean wasShort = isShortVideo;
         isShortVideo = video.isShorts;
         if (wasShort != isShortVideo) videoFrame.post(this::applyLayout);
+        // Reinitialise storyboard thumbnails and chapter titles for new video.
+        touchControls.onVideoChanged(video);
         touchControls.setVisible(true);
     }
+    void setChapters(java.util.List<Video> chapters) {
+        touchControls.setChapters(chapters);
+        chapterList.removeAllViews();
+        if (chapters == null || chapters.isEmpty()) {
+            chapterSection.setVisibility(View.GONE);
+            return;
+        }
+        chapterSection.setVisibility(View.VISIBLE);
+        for (Video chapter : chapters) {
+            if (chapter == null || chapter.startTimeMs < 0) continue;
+            String name = chapter.getTitleFull() != null ?
+                    chapter.getTitleFull() : "Chapter";
+            String timecode = formatChapterTime(chapter.startTimeMs);
+            TextView chip = pill(timecode + "  " + name,0xFFF2F2F2,0xFF1D1D1D);
+            chip.setSingleLine(true);
+            chip.setEllipsize(TextUtils.TruncateAt.END);
+            chip.setGravity(Gravity.CENTER_VERTICAL);
+            chip.setPadding(dp(15),0,dp(15),0);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    dp(178),dp(47));
+            params.setMarginEnd(dp(9));
+            chapterList.addView(chip,params);
+            chip.setOnClickListener(v -> player.setPositionMs(chapter.startTimeMs));
+        }
+    }
+
+    private String formatChapterTime(long millis) {
+        long secs = Math.max(0L,millis / 1000L);
+        if (secs >= 3600L) return String.format(java.util.Locale.US,
+                "%d:%02d:%02d",secs/3600L,secs/60L%60L,secs%60L);
+        return String.format(java.util.Locale.US,
+                "%d:%02d",secs/60L,secs%60L);
+    }
+
     void setSponsorSegments(java.util.List<com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.SeekBarSegment> segments) {
         touchControls.setSponsorSegments(segments);
     }
