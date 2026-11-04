@@ -7,6 +7,7 @@ on:
       - 'feature/mobile-v4-native-layout-*'
       - 'feature/mobile-v5-responsive-controls-settings-*'
       - 'feature/mobile-v6-touch-polish-*'
+      - 'feature/mobile-v7-youtube-settings-pip-media-*'
   workflow_dispatch:
 
 concurrency:
@@ -62,8 +63,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v6-touch-20261105 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v6 - Touch Playback and Sign-in (5 Nov 2026)" \
-            --notes "Mobile v6: compact translucent touch player without TV controls, portrait Shorts height, native QR sign-in, safe-width feed cards and small-screen/tablet responsiveness. Retains mobile Settings panel and original TV UI on television devices. Separate package com.sokytube.mobile. Debug signed. Physical device testing required." \
+          gh release create mobile-preview-v7-media-20261105 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7 - Quality, PiP and Media Controls (5 Nov 2026)" \
+            --notes "Mobile v7: YouTube-style playback gear and real resolution choices, native Android PiP, mobile media foreground service, notification controls and Android Auto audio session. Preview: car hardware/on-device validation pending. Separate package com.sokytube.mobile. Debug signed. Physical device testing required." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v6-touch-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-media-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
