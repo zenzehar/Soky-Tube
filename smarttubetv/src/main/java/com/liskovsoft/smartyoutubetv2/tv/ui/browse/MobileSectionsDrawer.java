@@ -9,6 +9,7 @@ import androidx.leanback.app.HeadersSupportFragment;
 import androidx.leanback.widget.VerticalGridView;
 
 import com.liskovsoft.smartyoutubetv2.tv.R;
+import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 
 /**
@@ -76,10 +77,11 @@ final class MobileSectionsDrawer {
         HeadersSupportFragment headers = fragment.getHeadersSupportFragment();
         if (headers != null) {
             headers.setBackgroundColor(Color.WHITE);
-            headers.setHeadersEnabled(true);
+            Helpers.setField(headers, "mHeadersEnabled", true);
             View actualList = headers.getView();
             if (actualList != null) {
                 ViewGroup.LayoutParams layout = actualList.getLayoutParams();
+                if (layout != null) layout.width = ViewGroup.LayoutParams.MATCH_PARENT;
                 // Leanback hid this view by applying a negative start margin.
                 // Reset it whenever our drawer opens, without moving the feed.
                 if (layout instanceof ViewGroup.MarginLayoutParams) {
@@ -89,10 +91,19 @@ final class MobileSectionsDrawer {
                         actualList.setLayoutParams(margin);
                     }
                 }
+                if (layout != null) actualList.setLayoutParams(layout);
                 actualList.setVisibility(View.VISIBLE);
+                View fade = actualList.findViewById(R.id.fade_out_edge);
+                if (fade != null) fade.setVisibility(View.GONE);
             }
             VerticalGridView grid = headers.getVerticalGridView();
             if (grid != null) {
+                grid.setChildrenVisibility(View.VISIBLE);
+                ViewGroup.LayoutParams gridLayout = grid.getLayoutParams();
+                if (gridLayout != null) {
+                    gridLayout.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                    grid.setLayoutParams(gridLayout);
+                }
                 int pad = MobileUi.dp(fragment.requireContext(), 8);
                 grid.setPadding(pad, pad, pad, pad);
                 grid.setClipToPadding(false);
@@ -105,7 +116,11 @@ final class MobileSectionsDrawer {
         scrim.setVisibility(View.GONE);
         dock.setVisibility(View.GONE);
         HeadersSupportFragment headers = fragment.getHeadersSupportFragment();
-        if (headers != null) headers.setHeadersEnabled(false);
+        if (headers != null) {
+            Helpers.setField(headers, "mHeadersEnabled", false);
+            VerticalGridView grid = headers.getVerticalGridView();
+            if (grid != null) grid.setChildrenVisibility(View.INVISIBLE);
+        }
     }
 
     void resize() {
