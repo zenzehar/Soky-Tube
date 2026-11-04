@@ -126,6 +126,31 @@ final class MobileWatchPage {
         actionParams.topMargin = dp(8);
         description.addView(actionsScroll, actionParams);
 
+        // Like the YouTube phone watch page: comments are in the content
+        // column, not hidden in the TV player-button strip.
+        LinearLayout commentsCard = new LinearLayout(activity);
+        commentsCard.setOrientation(LinearLayout.VERTICAL);
+        commentsCard.setPadding(dp(16),dp(12),dp(16),dp(12));
+        commentsCard.setBackground(rounded(0xFFF2F2F2, 16));
+        LinearLayout.LayoutParams commentsParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(84));
+        commentsParams.topMargin = dp(10);
+        description.addView(commentsCard,commentsParams);
+        TextView commentsHeading = new TextView(activity);
+        commentsHeading.setText("Comments    ›");
+        commentsHeading.setTextSize(16);
+        commentsHeading.setTextColor(0xFF1D1D1D);
+        commentsHeading.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        commentsCard.addView(commentsHeading);
+        TextView commentsHint = new TextView(activity);
+        commentsHint.setText("View comments for this video");
+        commentsHint.setTextSize(13);
+        commentsHint.setTextColor(0xFF666666);
+        commentsHint.setPadding(0,dp(7),0,0);
+        commentsCard.addView(commentsHint);
+        commentsCard.setContentDescription("Open video comments");
+        commentsCard.setOnClickListener(v -> player.openMobileComments());
+
         TextView nextHeader = new TextView(activity);
         nextHeader.setText("Up next");
         nextHeader.setTextColor(0xFF171717);
