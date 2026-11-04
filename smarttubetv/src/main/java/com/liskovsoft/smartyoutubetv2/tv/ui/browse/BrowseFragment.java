@@ -409,7 +409,8 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             HeaderItem header = ((PageRow) item).getHeaderItem();
             if (header == null) continue;
             final int position = i;
-            sections.getMenu().add(header.getName()).setOnMenuItemClickListener(menuItem -> {
+            String label = header.getName() != null ? header.getName() : "Section " + (i + 1);
+            sections.getMenu().add(label).setOnMenuItemClickListener(menuItem -> {
                 selectSection(position, true);
                 return true;
             });
