@@ -122,6 +122,12 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     private boolean mIsEngineBlocked;
     private MediaSessionCompat mMediaSession;
     private MediaSessionConnector mMediaSessionConnector;
+    private List<SeekBarSegment> mMobileSponsorSegments;
+
+    List<SeekBarSegment> getMobileSponsorSegments() {
+        return mMobileSponsorSegments;
+    }
+
     private boolean mKeepMobilePlaybackInBackground;
 
     void keepMobilePlaybackInBackground(boolean enabled) {
@@ -1003,8 +1009,16 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
     @Override
     public void setSeekBarSegments(List<SeekBarSegment> segments) {
-        if (mPlayerGlue != null) {
-            mPlayerGlue.setSeekBarSegments(segments);
+        if (mPlayerGlue != null) mPlayerGlue.setSeekBarSegments(segments);
+        if (MobileUi.isHandheld(getContext())) {
+            // SponsorBlock runs asynchronous fetches; marshal Android view
+            // updates to the main thread and discard stale lists on new video.
+            mMobileSponsorSegments = segments == null ? null : new java.util.ArrayList<>(segments);
+            if (getActivity() instanceof PlaybackActivity) {
+                PlaybackActivity activity = (PlaybackActivity) getActivity();
+                activity.runOnUiThread(() ->
+                    activity.onMobileSponsorSegmentsChanged(mMobileSponsorSegments));
+            }
         }
     }
 
