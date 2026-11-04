@@ -7,8 +7,6 @@ import android.os.Bundle;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
-import android.view.ViewConfiguration;
-import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 
 import androidx.fragment.app.Fragment;
 
@@ -37,11 +35,6 @@ public class PlaybackActivity extends LeanbackActivity {
     private static final float GAMEPAD_TRIGGER_INTENSITY_OFF = 0.45f;
     private boolean gamepadTriggerPressed = false;
     private PlaybackFragment mPlaybackFragment;
-    private MobilePlaybackControls mMobileControls;
-    private float mTouchStartX;
-    private float mTouchStartY;
-    private boolean mTouchMoved;
-    private boolean mTouchStartedOnControls;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -51,9 +44,6 @@ public class PlaybackActivity extends LeanbackActivity {
                 getSupportFragmentManager().findFragmentByTag(getString(R.string.playback_tag));
         if (fragment instanceof PlaybackFragment) {
             mPlaybackFragment = (PlaybackFragment) fragment;
-        }
-        if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
-            mMobileControls = new MobilePlaybackControls(this, mPlaybackFragment);
         }
     }
 
@@ -76,37 +66,10 @@ public class PlaybackActivity extends LeanbackActivity {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
-        if (mMobileControls != null) {
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                mTouchStartX = event.getX();
-                mTouchStartY = event.getY();
-                mTouchMoved = false;
-                mTouchStartedOnControls = mMobileControls.isTouchOnControls(event);
-            } else if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
-                int slop = ViewConfiguration.get(this).getScaledTouchSlop();
-                if (Math.abs(event.getX() - mTouchStartX) > slop ||
-                        Math.abs(event.getY() - mTouchStartY) > slop) mTouchMoved = true;
-            }
-            // Keep every pointer event in a control gesture on the same target,
-            // even if tapping "More" hides the mobile overlay mid-gesture.
-            if (mTouchStartedOnControls) {
-                boolean consumed = super.dispatchTouchEvent(event);
-                if (event.getActionMasked() == MotionEvent.ACTION_UP ||
-                        event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
-                    mTouchStartedOnControls = false;
-                }
-                return consumed;
-            }
-            if (mPlaybackFragment != null) mPlaybackFragment.onDispatchTouchEvent(event);
-            boolean handled = super.dispatchTouchEvent(event);
-            if (event.getActionMasked() == MotionEvent.ACTION_UP && !mTouchMoved) {
-                mMobileControls.showTemporarily();
-            }
-            return handled;
-        }
         if (mPlaybackFragment != null) {
             mPlaybackFragment.onDispatchTouchEvent(event);
         }
+
         return super.dispatchTouchEvent(event);
     }
 
@@ -237,18 +200,6 @@ public class PlaybackActivity extends LeanbackActivity {
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        if (mMobileControls != null) mMobileControls.resume();
-    }
-
-    @Override
-    protected void onStop() {
-        if (mMobileControls != null) mMobileControls.stop();
-        super.onStop();
-    }
-
-    @Override
     protected void onPause() {
         boolean hasDialogBug = AppDialogPresenter.instance(this).isDialogShown() && Build.VERSION.SDK_INT <= 23;
         boolean isScreenOff = getPlayerData().getBackgroundMode() != PlayerData.BACKGROUND_MODE_DEFAULT && Utils.isHardScreenOff(this);
@@ -297,7 +248,6 @@ public class PlaybackActivity extends LeanbackActivity {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
 
         mPlaybackFragment.onPIPChanged(isInPictureInPictureMode);
-        if (mMobileControls != null) mMobileControls.hideForPip(isInPictureInPictureMode);
     }
 
     /**
