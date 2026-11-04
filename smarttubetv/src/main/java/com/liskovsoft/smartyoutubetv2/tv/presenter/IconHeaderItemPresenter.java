@@ -1,6 +1,11 @@
 package com.liskovsoft.smartyoutubetv2.tv.presenter;
 
 import android.content.Context;
+import android.graphics.Color;
+import android.text.TextUtils;
+import android.util.TypedValue;
+import android.widget.LinearLayout;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.view.LayoutInflater;
@@ -45,7 +50,17 @@ public class IconHeaderItemPresenter extends RowHeaderPresenter {
         mDefaultIcon = new ColorDrawable(ContextCompat.getColor(viewGroup.getContext(), R.color.lb_grey));
 
         View view = inflater.inflate(R.layout.icon_header_item, null);
-        view.setAlpha(mUnselectedAlpha); // Initialize icons to be at half-opacity.
+        if (MobileUi.isHandheld(viewGroup.getContext())) {
+            // Original header items, but sized and styled for fingers rather
+            // than focus/highlight navigation on Android TV.
+            mUnselectedAlpha = 0.92f;
+            int vertical = MobileUi.dp(viewGroup.getContext(), 8);
+            view.setPadding(MobileUi.dp(viewGroup.getContext(), 16),
+                    vertical, MobileUi.dp(viewGroup.getContext(), 8), vertical);
+            view.setMinimumHeight(MobileUi.dp(viewGroup.getContext(), 52));
+            view.setBackgroundColor(Color.WHITE);
+        }
+        view.setAlpha(mUnselectedAlpha);
 
         return new ViewHolder(view);
     }
@@ -82,6 +97,30 @@ public class IconHeaderItemPresenter extends RowHeaderPresenter {
         TextView label = rootView.findViewById(R.id.header_label);
         if (label != null) {
             label.setText(headerItem.getName());
+            if (MobileUi.isHandheld(rootView.getContext())) {
+                label.setTextColor(0xFF1D1D1D);
+                label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+                label.setSingleLine(true);
+                label.setHorizontallyScrolling(false);
+                label.setEllipsize(TextUtils.TruncateAt.END);
+                label.setMaxWidth(Integer.MAX_VALUE);
+                ViewGroup.LayoutParams params = label.getLayoutParams();
+                if (params instanceof LinearLayout.LayoutParams) {
+                    LinearLayout.LayoutParams row = (LinearLayout.LayoutParams) params;
+                    row.width = 0;
+                    row.weight = 1f;
+                    row.setMarginStart(MobileUi.dp(rootView.getContext(), 12));
+                    label.setLayoutParams(row);
+                }
+            }
+        }
+        if (iconView != null && MobileUi.isHandheld(rootView.getContext())) {
+            int size = MobileUi.dp(rootView.getContext(), 25);
+            ViewGroup.LayoutParams params = iconView.getLayoutParams();
+            params.width = size;
+            params.height = size;
+            iconView.setLayoutParams(params);
+            if (mIconUrl == null) iconView.setColorFilter(0xFF333333);
         }
     }
 
