@@ -72,7 +72,7 @@ public class BrowseActivity extends LeanbackActivity {
             PopupMenu menu = new PopupMenu(this, hamburger);
             menu.getMenu().add("Sections").setOnMenuItemClickListener(item -> {
                 BrowseFragment browse = browseFragment();
-                if (browse != null) browse.openMobileSections();
+                if (browse != null) browse.showMobileSections(hamburger);
                 return true;
             });
             menu.getMenu().add("Home").setOnMenuItemClickListener(item -> {
