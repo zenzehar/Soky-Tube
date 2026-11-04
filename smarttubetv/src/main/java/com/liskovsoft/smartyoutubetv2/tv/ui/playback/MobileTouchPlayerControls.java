@@ -6,6 +6,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.text.TextUtils;
 import android.widget.ScrollView;
 import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem;
+import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.SeekBarSegment;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -48,6 +49,7 @@ final class MobileTouchPlayerControls {
     private final LinearLayout center;
     private final LinearLayout bottom;
     private final SeekBar seek;
+    private final MobileSponsorMarkersView sponsorMarkers;
     private final TextView time;
     private final ImageButton play;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -222,7 +224,15 @@ final class MobileTouchPlayerControls {
                 scheduleDismiss();
             }
         });
-        bottom.addView(seek, new LinearLayout.LayoutParams(
+        FrameLayout timeline = new FrameLayout(activity);
+        timeline.addView(seek, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        sponsorMarkers = new MobileSponsorMarkersView(activity, seek);
+        timeline.addView(sponsorMarkers, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Markings do not intercept touch, and are drawn over the native seekbar.
+        sponsorMarkers.setClickable(false);
+        bottom.addView(timeline, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(37)));
 
         root.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,orr,ob)-> resize(r-l,b-t));
@@ -407,6 +417,10 @@ final class MobileTouchPlayerControls {
         if (seconds >= 3600) return String.format(Locale.US, "%d:%02d:%02d",
                 seconds/3600, seconds/60%60, seconds%60);
         return String.format(Locale.US, "%d:%02d", seconds/60, seconds%60);
+    }
+
+    void setSponsorSegments(List<SeekBarSegment> segments) {
+        sponsorMarkers.updateSegments(segments);
     }
 
     void refresh() {
