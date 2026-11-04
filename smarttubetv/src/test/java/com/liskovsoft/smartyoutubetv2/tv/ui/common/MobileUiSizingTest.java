@@ -44,6 +44,38 @@ public class MobileUiSizingTest {
     }
 
     @Test
+    public void settingsCategoryColumnsAdaptToPhonesAndTablets() {
+        assertEquals(1, MobileUi.settingsColumnsForWidthDp(200));
+        assertEquals(1, MobileUi.settingsColumnsForWidthDp(393));
+        assertEquals(1, MobileUi.settingsColumnsForWidthDp(599));
+        assertEquals(2, MobileUi.settingsColumnsForWidthDp(600));
+        assertEquals(2, MobileUi.settingsColumnsForWidthDp(999));
+        assertEquals(3, MobileUi.settingsColumnsForWidthDp(1000));
+    }
+
+    @Test
+    public void nestedSettingsSheetNeverOverflowsWindow() {
+        float[] windows = {180f, 200f, 240f, 320f, 360f, 393f, 480f,
+                600f, 768f, 1024f, 1440f};
+        for (float dp : windows) {
+            float panel = MobileUi.settingsPanelWidthDp(dp);
+            assertTrue(panel > 0);
+            assertTrue("sheet exceeds window " + dp, panel <= dp);
+            if (dp <= 600f) assertEquals(dp, panel, 0.001f);
+            else assertTrue(panel <= 640f);
+        }
+    }
+
+    @Test
+    public void playerControlsUseActualVideoHeightThresholds() {
+        assertTrue(!MobileUi.showSecondaryPlayerActions(112f));
+        assertTrue(!MobileUi.showSecondaryPlayerActions(189f));
+        assertTrue(MobileUi.showSecondaryPlayerActions(203f));
+        assertTrue(!MobileUi.showPlayerMetadata(203f));
+        assertTrue(MobileUi.showPlayerMetadata(280f));
+    }
+
+    @Test
     public void accommodatesNarrowSplitWindowsAndTabletWidth() {
         assertEquals(1, MobileUi.columnsForWidthDp(240, false));
         assertEquals(1, MobileUi.columnsForWidthDp(320, false));
