@@ -28,8 +28,11 @@ public final class MobileUi {
     public static int columns(Context context, int cardWidthResId) {
         DisplayMetrics metrics = context.getResources().getDisplayMetrics();
         float widthDp = metrics.widthPixels / metrics.density;
-        float minimum = cardWidthResId == R.dimen.shorts_card_width ? 125f : 160f;
-        int columns = (int) ((widthDp - 24f + 12f) / (minimum + 12f));
+        // Account for the TV row's own insets so two tiles fit fully inside a phone.
+        // Wider tablets use more columns without stretching thumbnails to TV sizes.
+        float minimum = widthDp >= 600f ? 158f
+                : (cardWidthResId == R.dimen.shorts_card_width ? 114f : 124f);
+        int columns = (int) ((widthDp - 60f + 12f) / (minimum + 12f));
         return Math.max(1, Math.min(6, columns));
     }
 
@@ -37,8 +40,8 @@ public final class MobileUi {
         int columns = columns(context, widthResId);
         int screenWidth = context.getResources().getDisplayMetrics().widthPixels;
         int gap = dp(context, 12);
-        int horizontalInsets = dp(context, 32);
-        int width = Math.max(dp(context, 120),
+        int horizontalInsets = dp(context, 60);
+        int width = Math.max(dp(context, 104),
                 (screenWidth - horizontalInsets - gap * (columns - 1)) / columns);
         boolean shorts = widthResId == R.dimen.shorts_card_width;
         float ratio = shorts ? (16f / 9f) :
