@@ -44,13 +44,14 @@ final class MobileTouchPlayerControls {
     private boolean visible = true;
     private boolean tracking;
     private boolean released;
+    private boolean running = true;
 
     private final Runnable dismiss = () -> {
         if (!tracking && player.getPlayWhenReady()) setVisible(false);
     };
     private final Runnable progressTick = new Runnable() {
         @Override public void run() {
-            if (released) return;
+            if (released || !running) return;
             refresh();
             handler.postDelayed(this, 650);
         }
@@ -275,6 +276,20 @@ final class MobileTouchPlayerControls {
     private void scheduleDismiss() {
         handler.removeCallbacks(dismiss);
         if (visible && !tracking && !released) handler.postDelayed(dismiss, 3200);
+    }
+
+    void resume() {
+        if (released) return;
+        running = true;
+        handler.removeCallbacks(progressTick);
+        handler.post(progressTick);
+        scheduleDismiss();
+    }
+
+    void pause() {
+        running = false;
+        handler.removeCallbacks(progressTick);
+        handler.removeCallbacks(dismiss);
     }
 
     void release() {
