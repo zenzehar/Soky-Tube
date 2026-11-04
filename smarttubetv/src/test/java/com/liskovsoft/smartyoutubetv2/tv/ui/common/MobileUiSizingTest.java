@@ -32,6 +32,18 @@ public class MobileUiSizingTest {
     }
 
     @Test
+    public void videoFeedUsesNativeMobileColumnsForActualWindowWidth() {
+        assertEquals(1, MobileUi.feedColumnsForWidthDp(240));
+        assertEquals(1, MobileUi.feedColumnsForWidthDp(360));
+        assertEquals(1, MobileUi.feedColumnsForWidthDp(599));
+        assertEquals(2, MobileUi.feedColumnsForWidthDp(600));
+        assertEquals(2, MobileUi.feedColumnsForWidthDp(875));
+        assertEquals(2, MobileUi.feedColumnsForWidthDp(1079));
+        assertEquals(3, MobileUi.feedColumnsForWidthDp(1080));
+        assertEquals(3, MobileUi.feedColumnsForWidthDp(1440));
+    }
+
+    @Test
     public void accommodatesNarrowSplitWindowsAndTabletWidth() {
         assertEquals(1, MobileUi.columnsForWidthDp(240, false));
         assertEquals(1, MobileUi.columnsForWidthDp(320, false));
