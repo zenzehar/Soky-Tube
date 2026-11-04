@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only stmobile: keep the Android TV dimensions untouched. -->
+    <dimen name="card_width">150dp</dimen>
+    <dimen name="card_height">84dp</dimen>
+    <dimen name="shorts_card_width">114dp</dimen>
+    <dimen name="shorts_card_height">202dp</dimen>
+    <dimen name="grid_item_horizontal_spacing">10dp</dimen>
+    <dimen name="grid_item_vertical_spacing">10dp</dimen>
+    <dimen name="grid_horizontal_margin">12dp</dimen>
+    <dimen name="lb_basic_card_info_height">64dp</dimen>
+    <dimen name="lb_basic_card_info_padding">4dp</dimen>
+    <dimen name="lb_basic_card_title_text_size">13sp</dimen>
+    <dimen name="lb_basic_card_content_text_size">11sp</dimen>
+    <dimen name="lb_browse_title_icon_height">32dp</dimen>
+    <dimen name="lb_browse_title_height">32dp</dimen>
+</resources>
