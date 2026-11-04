@@ -63,7 +63,7 @@ public class VideoCardPresenter extends LongClickPresenter {
         mThumbQuality = getThumbQuality(context);
 
         boolean isCardMultilineTitleEnabled = MobileUi.isHandheld(context) || isCardMultilineTitleEnabled(context);
-        boolean isCardMultilineSubtitleEnabled = isCardMultilineSubtitleEnabled(context);
+        boolean isCardMultilineSubtitleEnabled = !MobileUi.isHandheld(context) && isCardMultilineSubtitleEnabled(context);
         boolean isCardTextAutoScrollEnabled = !MobileUi.isHandheld(context) && isCardTextAutoScrollEnabled(context);
         float cardTextScrollSpeed = getCardTextScrollSpeed(context);
 
@@ -95,8 +95,13 @@ public class VideoCardPresenter extends LongClickPresenter {
     }
 
     private void updateCardBackgroundColor(ComplexImageCardView view, boolean selected) {
-        int backgroundColor = selected ? mSelectedBackgroundColor : mDefaultBackgroundColor;
-        int textColor = selected ? mSelectedTextColor : mDefaultTextColor;
+        boolean mobile = MobileUi.isHandheld(view.getContext());
+        // TV focus paints the active card white; on touch this looks like a
+        // permanent, mismatched selection after the last tap.
+        int backgroundColor = mobile ? (selected ? 0xFF24252A : 0xFF1A1B1F)
+                : (selected ? mSelectedBackgroundColor : mDefaultBackgroundColor);
+        int textColor = mobile ? android.graphics.Color.WHITE
+                : (selected ? mSelectedTextColor : mDefaultTextColor);
 
         // Both background colors should be set because the view's
         // background is temporarily visible during animations.
