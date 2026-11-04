@@ -200,8 +200,8 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             return;
         }
 
-        setHeadersState(HEADERS_ENABLED);
-        setHeadersTransitionOnBackEnabled(true);
+        setHeadersState(MobileUi.isHandheld(getContext()) ? HEADERS_DISABLED : HEADERS_ENABLED);
+        setHeadersTransitionOnBackEnabled(!MobileUi.isHandheld(getContext()));
 
         int brandColorRes = Helpers.getThemeAttr(getContext(), R.attr.brandColor);
         int brandAccentColorRes = Helpers.getThemeAttr(getContext(), R.attr.brandAccentColor);
@@ -358,7 +358,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
     @Override
     public void focusOnContent() {
-        startHeadersTransitionSafe(false);
+        if (!MobileUi.isHandheld(getContext())) startHeadersTransitionSafe(false);
         if (getMainFragment() != null && getMainFragment().getView() != null) {
             getMainFragment().getView().requestFocus();
         }
@@ -399,14 +399,31 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     /**
      * Fix: IllegalStateException: "Can not perform this action after onSaveInstanceState"
      */
-    /** Opens the existing categories sidebar on phone without inventing a separate data flow. */
+    /** Phone/tablet sections menu reuses the same underlying sections and selection logic. */
+    public void showMobileSections(android.view.View anchor) {
+        if (anchor == null || mSectionRowAdapter == null) return;
+        android.widget.PopupMenu sections = new android.widget.PopupMenu(requireContext(), anchor);
+        for (int i = 0; i < mSectionRowAdapter.size(); i++) {
+            Object item = mSectionRowAdapter.get(i);
+            if (!(item instanceof PageRow)) continue;
+            HeaderItem header = ((PageRow) item).getHeaderItem();
+            if (header == null) continue;
+            final int position = i;
+            sections.getMenu().add(header.getName()).setOnMenuItemClickListener(menuItem -> {
+                selectSection(position, true);
+                return true;
+            });
+        }
+        sections.show();
+    }
+
     public void openMobileSections() {
-        startHeadersTransitionSafe(true);
+        if (!MobileUi.isHandheld(getContext())) startHeadersTransitionSafe(true);
     }
 
     private void startHeadersTransitionSafe(boolean withHeaders) {
         // Fix: IllegalStateException: "Can not perform this action after onSaveInstanceState"
-        if (!Utils.checkActivity(getActivity())) {
+        if (MobileUi.isHandheld(getContext()) || !Utils.checkActivity(getActivity())) {
             return;
         }
 
