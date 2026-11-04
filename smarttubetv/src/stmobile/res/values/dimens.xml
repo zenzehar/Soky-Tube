@@ -15,6 +15,17 @@
     <dimen name="lb_control_icon_height">26dp</dimen>
     <dimen name="lb_control_button_text_size">15sp</dimen>
     <dimen name="lb_playback_controls_child_margin_default">14dp</dimen>
+    <!-- TV search reserves a 600dp input plus 56-70dp outer margins.
+         Keep mobile horizontal margins small; the input width is measured in Java. -->
+    <dimen name="lb_search_bar_speech_orb_margin_start">12dp</dimen>
+    <dimen name="lb_search_bar_items_margin_start">6dp</dimen>
+    <dimen name="lb_search_bar_items_width">250dp</dimen>
+    <dimen name="lb_search_bar_padding_start">12dp</dimen>
+    <dimen name="lb_search_bar_padding_top">10dp</dimen>
+    <dimen name="lb_search_bar_items_layout_margin_top">8dp</dimen>
+    <dimen name="lb_search_browse_row_padding_start">12dp</dimen>
+    <dimen name="lb_search_browse_rows_align_top">100dp</dimen>
+    <dimen name="search_bar_right_items_margin">6dp</dimen>
     <dimen name="card_width">150dp</dimen>
     <dimen name="card_height">84dp</dimen>
     <dimen name="shorts_card_width">114dp</dimen>
