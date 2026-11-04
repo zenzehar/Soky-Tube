@@ -1163,34 +1163,47 @@ public class PlaybackTransportRowPresenter extends PlaybackRowPresenter {
 
     private static void applyResponsiveMobilePlayer(ViewHolder vh) {
         Context context = vh.view.getContext();
-        // Short phone landscape and narrow multi-window panes cannot display
-        // TV-length titles plus every control row at full height.
-        boolean shortWindow = context.getResources().getConfiguration().screenHeightDp < 430;
-        int primary = MobileUi.dp(context, shortWindow ? 48 : 52);
-        int secondary = MobileUi.dp(context, shortWindow ? 48 : 52);
-        int seekHeight = MobileUi.dp(context, shortWindow ? 36 : 42);
+        float videoHeightDp = MobileUi.playerHeightDp(context);
+        boolean secondaryVisible = MobileUi.showSecondaryPlayerActions(videoHeightDp);
+        boolean showMetadata = MobileUi.showPlayerMetadata(videoHeightDp);
+
+        // Adapt to the VIDEO viewport rather than the full device's height.
+        // A 360dp phone in portrait has only a ~203dp-tall 16:9 player.
+        // The native primary controls and touch seekbar must always fit.
+        int primary = MobileUi.dp(context, videoHeightDp < 150f ? 44f : 48f);
+        int secondary = MobileUi.dp(context, 48f);
+        int seek = MobileUi.dp(context, videoHeightDp < 150f ? 30f : 38f);
 
         View primaryScroller = (View) vh.mControlsDock.getParent();
         View secondaryScroller = (View) vh.mSecondaryControlsDock.getParent();
-        if (primaryScroller != null && primaryScroller.getLayoutParams().height != primary) {
-            ViewGroup.LayoutParams params = primaryScroller.getLayoutParams();
-            params.height = primary;
-            primaryScroller.setLayoutParams(params);
+        if (primaryScroller != null && primaryScroller.getLayoutParams() != null) {
+            ViewGroup.LayoutParams p = primaryScroller.getLayoutParams();
+            if (p.height != primary) {
+                p.height = primary;
+                primaryScroller.setLayoutParams(p);
+            }
+            primaryScroller.setVisibility(View.VISIBLE);
         }
-        if (secondaryScroller != null && secondaryScroller.getLayoutParams().height != secondary) {
-            ViewGroup.LayoutParams params = secondaryScroller.getLayoutParams();
-            params.height = secondary;
-            secondaryScroller.setLayoutParams(params);
+        if (secondaryScroller != null && secondaryScroller.getLayoutParams() != null) {
+            ViewGroup.LayoutParams p = secondaryScroller.getLayoutParams();
+            if (p.height != secondary) {
+                p.height = secondary;
+                secondaryScroller.setLayoutParams(p);
+            }
+            secondaryScroller.setVisibility(secondaryVisible ? View.VISIBLE : View.GONE);
         }
-        if (vh.mProgressBar.getLayoutParams().height != seekHeight) {
-            ViewGroup.LayoutParams params = vh.mProgressBar.getLayoutParams();
-            params.height = seekHeight;
-            vh.mProgressBar.setLayoutParams(params);
+        ViewGroup.LayoutParams progress = vh.mProgressBar.getLayoutParams();
+        if (progress != null && progress.height != seek) {
+            progress.height = seek;
+            vh.mProgressBar.setLayoutParams(progress);
         }
-        PlaybackControlsRow row = (PlaybackControlsRow) vh.getRow();
-        boolean hasDescription = row != null && row.getItem() != null;
-        vh.mDescriptionDock.setVisibility(!shortWindow && hasDescription ? View.VISIBLE : View.GONE);
-        vh.mAdditionalInfo.setVisibility(shortWindow ? View.GONE : View.VISIBLE);
+        // Details already appear underneath the embedded player on phone.
+        // Never allow TV's description header to push controls outside 16:9.
+        vh.mDescriptionDock.setVisibility(View.GONE);
+        vh.mAdditionalInfo.setVisibility(showMetadata ? View.VISIBLE : View.GONE);
+        if (vh.mTimeInfo != null) {
+            vh.mTimeInfo.setVisibility(showMetadata ? View.VISIBLE : View.GONE);
+        }
     }
 
     private static void styleMobileDescription(View root, int[] textIndex) {
