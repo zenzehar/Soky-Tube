@@ -57,6 +57,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     private boolean mIsFragmentCreated;
     private boolean mFocusOnContent;
     private CrashRestorer mCrashRestorer;
+    private MobileSectionsDrawer mMobileDrawer;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -97,33 +98,29 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
         mProgressBarManager.setRootView((ViewGroup) root);
         if (MobileUi.isHandheld(getContext())) {
-            root.post(() -> resizeMobileHeaders(root));
+            mMobileDrawer = new MobileSectionsDrawer(this, root);
         }
         return root;
     }
 
-    /** Fit the original sidebar into the currently visible touch window,
-     * including foldables, rotation and Android split-screen widths. */
-    private void resizeMobileHeaders(View root) {
-        if (root == null || !MobileUi.isHandheld(getContext())) return;
-        View dock = root.findViewById(R.id.browse_headers_dock);
-        if (dock == null) return;
-        float windowDp = MobileUi.windowWidthDp(requireContext());
-        int width = MobileUi.dp(requireContext(),
-                Math.max(100f, Math.min(264f, windowDp * 0.72f)));
-        ViewGroup.LayoutParams params = dock.getLayoutParams();
-        if (params != null && params.width != width) {
-            params.width = width;
-            dock.setLayoutParams(params);
-        }
+    /** Back first closes the single original section drawer. */
+    public boolean closeMobileDrawer() {
+        if (mMobileDrawer == null || !mMobileDrawer.isOpen()) return false;
+        mMobileDrawer.hide();
+        return true;
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (mMobileDrawer != null) mMobileDrawer.hide();
+        mMobileDrawer = null;
+        super.onDestroyView();
     }
 
     @Override
     public void onConfigurationChanged(android.content.res.Configuration config) {
         super.onConfigurationChanged(config);
-        if (getView() != null && MobileUi.isHandheld(getContext())) {
-            getView().post(() -> resizeMobileHeaders(getView()));
-        }
+        if (mMobileDrawer != null) mMobileDrawer.resize();
     }
 
     @Override
