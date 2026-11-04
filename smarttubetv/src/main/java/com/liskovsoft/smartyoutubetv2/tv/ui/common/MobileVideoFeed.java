@@ -22,6 +22,7 @@ import androidx.annotation.NonNull;
 import androidx.leanback.widget.ListRow;
 import androidx.leanback.widget.ObjectAdapter;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
@@ -47,6 +48,7 @@ public final class MobileVideoFeed {
     private final Context context;
     private final LinearLayout root;
     private final RecyclerView list;
+    private final GridLayoutManager gridLayoutManager;
     private final LinearLayout chipsRow;
     private final HorizontalScrollView chipsScroll;
     private final FeedAdapter adapter = new FeedAdapter();
@@ -87,7 +89,8 @@ public final class MobileVideoFeed {
                 new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)));
 
         list = new RecyclerView(context);
-        list.setLayoutManager(new LinearLayoutManager(context));
+        gridLayoutManager = new GridLayoutManager(context, 1);
+        list.setLayoutManager(gridLayoutManager);
         list.setAdapter(adapter);
         list.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         list.setItemAnimator(null);
@@ -103,6 +106,23 @@ public final class MobileVideoFeed {
         list.setClipToPadding(false);
         root.addView(list, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        // One full-width thumbnail on portrait phones, two on wide phones and
+        // tablets, three on larger tablets. Reflow when the window is resized,
+        // not just when the device physically rotates.
+        root.addOnLayoutChangeListener((v, left, top, right, bottom,
+                                        oldLeft, oldTop, oldRight, oldBottom) -> {
+            if ((right - left) != (oldRight - oldLeft)) updateColumns(right - left);
+        });
+    }
+
+    private void updateColumns(int widthPx) {
+        float widthDp = widthPx / Math.max(0.1f,
+                context.getResources().getDisplayMetrics().density);
+        int span = widthDp >= 1080f ? 3 : widthDp >= 600f ? 2 : 1;
+        if (gridLayoutManager.getSpanCount() != span) {
+            gridLayoutManager.setSpanCount(span);
+            adapter.notifyDataSetChanged();
+        }
     }
 
     private int dp(float value) { return MobileUi.dp(context, value); }
