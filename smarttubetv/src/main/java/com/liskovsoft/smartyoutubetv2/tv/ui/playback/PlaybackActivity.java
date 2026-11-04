@@ -41,6 +41,7 @@ public class PlaybackActivity extends LeanbackActivity {
     private float mTouchStartX;
     private float mTouchStartY;
     private boolean mTouchMoved;
+    private boolean mTouchStartedOnControls;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -80,13 +81,21 @@ public class PlaybackActivity extends LeanbackActivity {
                 mTouchStartX = event.getX();
                 mTouchStartY = event.getY();
                 mTouchMoved = false;
+                mTouchStartedOnControls = mMobileControls.isTouchOnControls(event);
             } else if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
                 int slop = ViewConfiguration.get(this).getScaledTouchSlop();
                 if (Math.abs(event.getX() - mTouchStartX) > slop ||
                         Math.abs(event.getY() - mTouchStartY) > slop) mTouchMoved = true;
             }
-            if (mMobileControls.isTouchOnControls(event)) {
-                return super.dispatchTouchEvent(event);
+            // Keep every pointer event in a control gesture on the same target,
+            // even if tapping "More" hides the mobile overlay mid-gesture.
+            if (mTouchStartedOnControls) {
+                boolean consumed = super.dispatchTouchEvent(event);
+                if (event.getActionMasked() == MotionEvent.ACTION_UP ||
+                        event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                    mTouchStartedOnControls = false;
+                }
+                return consumed;
             }
             if (mPlaybackFragment != null) mPlaybackFragment.onDispatchTouchEvent(event);
             boolean handled = super.dispatchTouchEvent(event);
