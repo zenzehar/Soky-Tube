@@ -124,6 +124,9 @@ final class MobileWatchPage {
         addPill(actions, "Share", () -> player.mobileAction(R.id.action_share));
         addPill(actions, "Save", () -> player.mobileAction(R.id.action_playlist_add));
         addPill(actions, "Captions", () -> player.mobileAction(R.id.lb_control_closed_captioning));
+        addPill(actions, "Comments", player::openMobileComments);
+        addPill(actions, "Settings", touchControls::openSettings);
+        addPill(actions, "PiP", () -> activity.enterMobilePip(false));
         LinearLayout.LayoutParams actionParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(52));
         actionParams.topMargin = dp(8);
