@@ -107,10 +107,16 @@ public class BrowseActivity extends LeanbackActivity {
         mMobileBottomBar.setGravity(Gravity.CENTER);
         mMobileBottomBar.setBackgroundColor(Color.WHITE);
         mMobileBottomBar.setOrientation(LinearLayout.HORIZONTAL);
+        mMobileBottomBar.setElevation(dp(4));
         addTab(R.drawable.mobile_ic_home, "Home", v -> selectHome());
-        addTab(R.drawable.mobile_ic_library, "Subscriptions", v -> selectNamedSection("subscription", v));
+        addTab(R.drawable.mobile_ic_play, "Shorts", v -> selectNamedSection("shorts", v));
+        addTab(R.drawable.mobile_ic_library, "Subscriptions",
+                v -> selectNamedSection("subscription", v));
         addTab(R.drawable.mobile_ic_user, "You", v -> {
-            if (!selectNamedSection("history", v)) selectNamedSection("account", v);
+            BrowseFragment browse = browseFragment();
+            if (browse == null || !browse.selectMobileSectionByName("history")) {
+                showSections(v);
+            }
         });
 
         FrameLayout.LayoutParams header = new FrameLayout.LayoutParams(
@@ -122,6 +128,7 @@ public class BrowseActivity extends LeanbackActivity {
         mMobileToolbar.bringToFront();
         mMobileBottomBar.bringToFront();
         applyWindowSizing();
+        if (mMobileBottomBar.getChildCount() > 0) highlightMobileTab(mMobileBottomBar.getChildAt(0));
     }
 
     private int ViewGroupHeight() { return dp(52); }
@@ -151,11 +158,37 @@ public class BrowseActivity extends LeanbackActivity {
         label.setTextSize(11);
         label.setGravity(Gravity.CENTER);
         column.addView(label);
-        column.setOnClickListener(handler);
+        column.setOnClickListener(v -> {
+            handler.onClick(v);
+            highlightMobileTab(column);
+        });
         column.setContentDescription(title);
         column.setFocusable(true);
         mMobileBottomBar.addView(column,
                 new LinearLayout.LayoutParams(0, FrameLayout.LayoutParams.MATCH_PARENT, 1f));
+    }
+
+    private void highlightMobileTab(View selected) {
+        if (mMobileBottomBar == null) return;
+        for (int i = 0; i < mMobileBottomBar.getChildCount(); i++) {
+            View view = mMobileBottomBar.getChildAt(i);
+            if (!(view instanceof LinearLayout)) continue;
+            LinearLayout tab = (LinearLayout) view;
+            boolean active = view == selected;
+            ImageView tabIcon = (ImageView) tab.getChildAt(0);
+            TextView tabText = (TextView) tab.getChildAt(1);
+            int ink = active ? 0xFF111111 : 0xFF707070;
+            tabIcon.setColorFilter(ink);
+            tabText.setTextColor(ink);
+            tabText.setTypeface(Typeface.DEFAULT, active ? Typeface.BOLD : Typeface.NORMAL);
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        BrowseFragment browse = browseFragment();
+        if (browse != null && browse.closeMobileDrawer()) return;
+        super.onBackPressed();
     }
 
     private void selectHome() {
