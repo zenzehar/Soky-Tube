@@ -1151,10 +1151,46 @@ public class PlaybackTransportRowPresenter extends PlaybackRowPresenter {
         mSecondaryControlsPresenter.onBindViewHolder(vh.mSecondaryControlsVh,
                 vh.mSecondaryBoundData);
 
+        if (MobileUi.isHandheld(vh.view.getContext())) {
+            applyResponsiveMobilePlayer(vh);
+        }
+
         vh.setTotalTime(row.getDuration());
         vh.setCurrentPosition(row.getCurrentPosition());
         vh.setBufferedPosition(row.getBufferedPosition());
         row.setOnPlaybackProgressChangedListener(vh.mListener);
+    }
+
+    private static void applyResponsiveMobilePlayer(ViewHolder vh) {
+        Context context = vh.view.getContext();
+        // Short phone landscape and narrow multi-window panes cannot display
+        // TV-length titles plus every control row at full height.
+        boolean shortWindow = context.getResources().getConfiguration().screenHeightDp < 430;
+        int primary = MobileUi.dp(context, shortWindow ? 48 : 52);
+        int secondary = MobileUi.dp(context, shortWindow ? 48 : 52);
+        int seekHeight = MobileUi.dp(context, shortWindow ? 36 : 42);
+
+        View primaryScroller = (View) vh.mControlsDock.getParent();
+        View secondaryScroller = (View) vh.mSecondaryControlsDock.getParent();
+        if (primaryScroller != null && primaryScroller.getLayoutParams().height != primary) {
+            ViewGroup.LayoutParams params = primaryScroller.getLayoutParams();
+            params.height = primary;
+            primaryScroller.setLayoutParams(params);
+        }
+        if (secondaryScroller != null && secondaryScroller.getLayoutParams().height != secondary) {
+            ViewGroup.LayoutParams params = secondaryScroller.getLayoutParams();
+            params.height = secondary;
+            secondaryScroller.setLayoutParams(params);
+        }
+        if (vh.mProgressBar.getLayoutParams().height != seekHeight) {
+            ViewGroup.LayoutParams params = vh.mProgressBar.getLayoutParams();
+            params.height = seekHeight;
+            vh.mProgressBar.setLayoutParams(params);
+        }
+        if (shortWindow) {
+            vh.mDescriptionDock.setVisibility(View.GONE);
+            vh.mAdditionalInfo.setVisibility(View.GONE);
+        }
     }
 
     private static void styleMobileDescription(View root, int[] textIndex) {
