@@ -111,13 +111,6 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     }
 
     @Override
-    public void onDestroyView() {
-        if (mMobileDrawer != null) mMobileDrawer.hide();
-        mMobileDrawer = null;
-        super.onDestroyView();
-    }
-
-    @Override
     public void onConfigurationChanged(android.content.res.Configuration config) {
         super.onConfigurationChanged(config);
         if (mMobileDrawer != null) mMobileDrawer.resize();
@@ -527,6 +520,8 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
     @Override
     public void onDestroyView() {
+        if (mMobileDrawer != null) mMobileDrawer.hide();
+        mMobileDrawer = null;
         mSectionFragmentFactory.cleanup();
 
         super.onDestroyView();
