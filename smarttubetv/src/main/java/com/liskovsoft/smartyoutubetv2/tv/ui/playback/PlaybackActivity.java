@@ -4,6 +4,8 @@ import android.annotation.TargetApi;
 import android.app.PictureInPictureParams;
 import android.os.Build;
 import android.os.Bundle;
+import android.content.res.Configuration;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -35,18 +37,58 @@ public class PlaybackActivity extends LeanbackActivity {
     private static final float GAMEPAD_TRIGGER_INTENSITY_OFF = 0.45f;
     private boolean gamepadTriggerPressed = false;
     private PlaybackFragment mPlaybackFragment;
+    private MobileWatchPage mMobileWatch;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.fragment_playback);
+        boolean mobile = MobileUi.isHandheld(this);
+        setContentView(mobile ? R.layout.fragment_playback_mobile : R.layout.fragment_playback);
         Fragment fragment =
                 getSupportFragmentManager().findFragmentByTag(getString(R.string.playback_tag));
         if (fragment instanceof PlaybackFragment) {
             mPlaybackFragment = (PlaybackFragment) fragment;
         }
+        if (mobile && mPlaybackFragment != null) mMobileWatch = new MobileWatchPage(this, mPlaybackFragment);
     }
 
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
+            if (mMobileWatch != null) mMobileWatch.applyLayout();
+            // Rebind only AFTER the responsive 16:9 container has measured
+            // its new dimensions, otherwise controls use the old orientation.
+            getWindow().getDecorView().post(() -> {
+                if (!isFinishing() && mPlaybackFragment != null)
+                    mPlaybackFragment.onMobileWindowResized();
+            });
+        }
+    }
+
+    void onMobileVideoChanged(com.liskovsoft.smartyoutubetv2.common.app.models.data.Video video) {
+        if (mMobileWatch != null) mMobileWatch.onVideoChanged(video);
+    }
+    void onMobileSuggestionsChanged(androidx.leanback.widget.ObjectAdapter rows) {
+        if (mMobileWatch != null) mMobileWatch.onSuggestions(rows);
+    }
+    @Override protected void onResume() {
+        super.onResume();
+        if (mMobileWatch != null) mMobileWatch.resume();
+        // PlaybackFragment previously hid the Leanback row for a temporary
+        // elementary menu. Restore the single original touch-ready control
+        // surface after fragment creation, without drawing a second overlay.
+        if (MobileUi.isHandheld(this) && mPlaybackFragment != null &&
+                mPlaybackFragment.getView() != null) {
+            android.view.View originalControls =
+                    mPlaybackFragment.getView().findViewById(R.id.playback_controls_dock);
+            if (originalControls != null) originalControls.setVisibility(android.view.View.VISIBLE);
+        }
+    }
+    @Override protected void onStop() {
+        if (mMobileWatch != null) mMobileWatch.stop();
+        super.onStop();
+    }
     @Override
     protected void initTheme() {
         int playerThemeResId = MainUIData.instance(this).getColorScheme().playerThemeResId;
@@ -248,6 +290,7 @@ public class PlaybackActivity extends LeanbackActivity {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
 
         mPlaybackFragment.onPIPChanged(isInPictureInPictureMode);
+        if (isInPictureInPictureMode && mMobileWatch != null) mMobileWatch.setControlsShown(false);
     }
 
     /**

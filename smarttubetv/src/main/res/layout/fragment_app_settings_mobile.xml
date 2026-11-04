@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phone-only Settings: fixed responsive sheet, with explicit Back and Close.
+     Original TV dialog layout remains unchanged in fragment_app_settings.xml. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#101014">
+
+    <LinearLayout
+        android:id="@+id/mobile_settings_sheet"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:background="#212126">
+
+        <LinearLayout
+            android:id="@+id/mobile_settings_toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="#212126">
+
+            <TextView
+                android:id="@+id/mobile_settings_back"
+                android:layout_width="52dp"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="‹"
+                android:textSize="35sp"
+                android:textColor="#FFFFFFFF"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Back to previous settings" />
+
+            <TextView
+                android:id="@+id/mobile_settings_title"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center_vertical"
+                android:text="Settings"
+                android:textStyle="bold"
+                android:textSize="18sp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:textColor="#FFFFFFFF" />
+
+            <TextView
+                android:id="@+id/mobile_settings_close"
+                android:layout_width="56dp"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="×"
+                android:textSize="30sp"
+                android:textColor="#FFFFFFFF"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Close settings" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/mobile_settings_body"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+            <fragment
+                android:id="@+id/app_settings_fragment"
+                android:name="com.liskovsoft.smartyoutubetv2.tv.ui.dialogs.AppDialogFragment"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"/>
+        </FrameLayout>
+    </LinearLayout>
+</FrameLayout>

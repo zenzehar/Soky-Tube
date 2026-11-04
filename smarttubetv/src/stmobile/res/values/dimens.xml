@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only stmobile: keep the Android TV dimensions untouched. -->
+    <!-- The upstream TV theme reserves 265dp on the left and 130dp at the top.
+         Remove those TV-only gutters; mobile has its own hamburger toolbar. -->
+    <dimen name="lb_browse_rows_margin_start">12dp</dimen>
+    <dimen name="lb_browse_headers_width">232dp</dimen>
+    <dimen name="lb_browse_header_height">48dp</dimen>
+    <dimen name="lb_browse_rows_margin_top">10dp</dimen>
+    <!-- Original native transport controls use 90dp TV buttons and 48dp gaps.
+         Preserve the buttons and their actions, but size them for finger use. -->
+    <dimen name="lb_control_button_diameter">56dp</dimen>
+    <dimen name="lb_control_button_height">52dp</dimen>
+    <dimen name="lb_control_button_secondary_diameter">48dp</dimen>
+    <dimen name="lb_control_button_secondary_height">48dp</dimen>
+    <dimen name="lb_control_icon_width">26dp</dimen>
+    <dimen name="lb_control_icon_height">26dp</dimen>
+    <dimen name="lb_control_button_text_size">15sp</dimen>
+    <dimen name="lb_playback_controls_child_margin_default">14dp</dimen>
+    <!-- TV search reserves a 600dp input plus 56-70dp outer margins.
+         Keep mobile horizontal margins small; the input width is measured in Java. -->
+    <dimen name="lb_search_bar_speech_orb_margin_start">12dp</dimen>
+    <dimen name="lb_search_bar_items_margin_start">6dp</dimen>
+    <dimen name="lb_search_bar_items_width">250dp</dimen>
+    <dimen name="lb_search_bar_padding_start">12dp</dimen>
+    <dimen name="lb_search_bar_padding_top">10dp</dimen>
+    <dimen name="lb_search_bar_items_layout_margin_top">8dp</dimen>
+    <dimen name="lb_search_browse_row_padding_start">12dp</dimen>
+    <dimen name="lb_search_browse_rows_align_top">100dp</dimen>
+    <dimen name="search_bar_right_items_margin">6dp</dimen>
+    <dimen name="card_width">150dp</dimen>
+    <dimen name="card_height">84dp</dimen>
+    <dimen name="shorts_card_width">114dp</dimen>
+    <dimen name="shorts_card_height">202dp</dimen>
+    <dimen name="grid_item_horizontal_spacing">10dp</dimen>
+    <dimen name="grid_item_vertical_spacing">10dp</dimen>
+    <dimen name="grid_horizontal_margin">12dp</dimen>
+    <dimen name="lb_basic_card_info_height">64dp</dimen>
+    <dimen name="lb_basic_card_info_padding">4dp</dimen>
+    <dimen name="lb_basic_card_title_text_size">13sp</dimen>
+    <dimen name="lb_basic_card_content_text_size">11sp</dimen>
+    <dimen name="lb_browse_title_icon_height">32dp</dimen>
+    <dimen name="lb_browse_title_height">32dp</dimen>
+</resources>

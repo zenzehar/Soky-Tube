@@ -17,6 +17,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.models.playback.manager.PlayerE
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerTweaksData;
 import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 
 /**
  * Subclass of {@link PlaybackSupportFragment} that is responsible for providing a {@link SurfaceView}
@@ -46,6 +47,13 @@ public class SurfacePlaybackFragment extends PlaybackSupportFragment {
         mVideoSurfaceRoot.addView(mVideoSurfaceWrapper.getSurfaceView(), 0);
         mVideoSurfaceRoot.setAspectRatioListener((targetAspectRatio, naturalAspectRatio, aspectRatioMismatch) -> scaleIfNeeded());
         mLeanbackSubtitles = root.findViewById(com.liskovsoft.smartyoutubetv2.tv.R.id.leanback_subtitles);
+        if (MobileUi.isHandheld(getContext())) {
+            // The original TV player reserves 150sp on EACH side for subtitles.
+            // That can leave almost no readable subtitle area on a 360dp phone.
+            int mobileSubtitleInset = MobileUi.dp(getContext(), 14);
+            mLeanbackSubtitles.setPadding(mobileSubtitleInset, 0, mobileSubtitleInset,
+                    MobileUi.dp(getContext(), 12));
+        }
         mSubtitlesPadding = mLeanbackSubtitles.getPaddingLeft();
         setBackgroundType(PlaybackSupportFragment.BG_LIGHT);
         return root;

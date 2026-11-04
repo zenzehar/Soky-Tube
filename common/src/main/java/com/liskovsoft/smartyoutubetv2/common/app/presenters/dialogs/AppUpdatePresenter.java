@@ -49,6 +49,15 @@ public class AppUpdatePresenter extends BasePresenter<Void> implements AppUpdate
     }
 
     public void start(boolean forceCheck) {
+        // The original upstream updater offers APKs for SmartTube's package ID.
+        // Never suggest incompatible packages to the independently installed mobile build.
+        if (getContext() != null && "com.sokytube.mobile".equals(getContext().getPackageName())) {
+            if (forceCheck) {
+                MessageHelpers.showMessage(getContext(),
+                        "Soky Tube Mobile updates are available from this project's GitHub Releases.");
+            }
+            return;
+        }
         mIsForceCheck = forceCheck;
 
         if (forceCheck) {
