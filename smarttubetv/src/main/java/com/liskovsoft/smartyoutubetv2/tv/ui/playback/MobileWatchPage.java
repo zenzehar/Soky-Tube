@@ -77,8 +77,9 @@ final class MobileWatchPage {
         shade.setClickable(true);
         shade.setContentDescription("Tap to show or hide playback controls");
         shade.setOnClickListener(v -> setControlsShown(!controlsShown));
-        videoFrame.addView(shade, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        // Keep the legacy mobile overlay detached. Only the original
+        // PlaybackFragment/Leanback control menu is visible and touch-active.
+        // The portrait watch page below remains intact.
 
         controls = new LinearLayout(activity);
         controls.setOrientation(LinearLayout.VERTICAL);
