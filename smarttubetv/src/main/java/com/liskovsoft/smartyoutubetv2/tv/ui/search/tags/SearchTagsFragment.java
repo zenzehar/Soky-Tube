@@ -1,6 +1,7 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.search.tags;
 
 import android.os.Bundle;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.speech.SpeechRecognizer;
 import android.text.TextUtils;
 
@@ -63,7 +64,8 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
         mSearchData = SearchData.instance(getContext());
 
         setupEventListeners();
-        setKeyboardAutoShowEnabled(mSearchData.isKeyboardAutoShowEnabled());
+        // Phones should open the platform IME without requiring a D-pad action.
+        setKeyboardAutoShowEnabled(MobileUi.isHandheld(getContext()) || mSearchData.isKeyboardAutoShowEnabled());
         setKeyboardFixEnabled(mSearchData.isKeyboardFixEnabled());
         setTypingCorrectionDisabled(mSearchData.isTypingCorrectionDisabled());
     }
