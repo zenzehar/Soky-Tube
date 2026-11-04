@@ -105,10 +105,8 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
             if (manager != null) manager.createNotificationChannel(channel);
         }
         setSessionToken(session(this).getSessionToken());
-        // Promote immediately after a foreground service start to meet the
-        // Android 8+ 5-second deadline.
-        startForeground(NOTIFICATION_ID, notification());
-        foreground = true;
+        // Binding from Android Auto alone does not imply playback; only enter
+        // foreground state when an actual phone player starts the service.
     }
 
     @Nullable @Override public BrowserRoot onGetRoot(@NonNull String clientPackageName,
