@@ -173,9 +173,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                         } else {
                             mBrowsePresenter.onSectionFocused((int) headerId);
                         }
-                        if (getView() != null) getView().post(() -> {
-                            if (isAdded()) startHeadersTransitionSafe(false);
-                        });
+                        if (mMobileDrawer != null) mMobileDrawer.hide();
                     } else if (getHeadersSupportFragment().getSelectedPosition() != newPosition) {
                         getHeadersSupportFragment().setSelectedPosition(newPosition);
                     } else {
@@ -370,6 +368,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
     @Override
     public void selectSection(int index, boolean focusOnContent) {
+        if (mMobileDrawer != null) mMobileDrawer.hide();
         if (index >= 0 && mSectionRowAdapter.size() > 0) {
             mFocusOnContent = focusOnContent; // focus after header transition
 
@@ -450,16 +449,29 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     /** Open the existing Leanback sections sidebar. Never show a second PopupMenu. */
     public void showMobileSections(android.view.View anchor) {
         if (MobileUi.isHandheld(getContext())) {
-            startHeadersTransitionSafe(!isShowingHeaders());
+            if (mMobileDrawer != null) mMobileDrawer.toggle();
+        } else {
+            startHeadersTransitionSafe(true);
         }
     }
 
     public void openMobileSections() {
-        startHeadersTransitionSafe(true);
+        if (MobileUi.isHandheld(getContext())) {
+            if (mMobileDrawer != null) mMobileDrawer.show();
+        } else {
+            startHeadersTransitionSafe(true);
+        }
     }
 
     private void startHeadersTransitionSafe(boolean withHeaders) {
-        // Fix: IllegalStateException: "Can not perform this action after onSaveInstanceState"
+        if (MobileUi.isHandheld(getContext())) {
+            if (mMobileDrawer != null) {
+                if (withHeaders) mMobileDrawer.show();
+                else mMobileDrawer.hide();
+            }
+            return;
+        }
+        // TV: retain the original Leanback transition unchanged.
         if (!Utils.checkActivity(getActivity())) {
             return;
         }
