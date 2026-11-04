@@ -384,6 +384,11 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     /**
      * Fix: IllegalStateException: "Can not perform this action after onSaveInstanceState"
      */
+    /** Opens the existing categories sidebar on phone without inventing a separate data flow. */
+    public void openMobileSections() {
+        startHeadersTransitionSafe(true);
+    }
+
     private void startHeadersTransitionSafe(boolean withHeaders) {
         // Fix: IllegalStateException: "Can not perform this action after onSaveInstanceState"
         if (!Utils.checkActivity(getActivity())) {
