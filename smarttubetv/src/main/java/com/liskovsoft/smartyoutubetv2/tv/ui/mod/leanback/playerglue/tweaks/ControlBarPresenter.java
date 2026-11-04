@@ -138,6 +138,12 @@ class ControlBarPresenter extends Presenter {
 
             // TODO: modified
             // Decrease margin between player's buttons
+            if (com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi.isHandheld(context)) {
+                // TV's compact centre-spacing makes 48dp touch targets overlap.
+                // Use true finger-sized spacing and let the original control
+                // row scroll horizontally instead of shrinking its buttons.
+                return com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi.dp(context, 52);
+            }
             return getChildMarginDefault(context) + getControlIconWidth(context) / 3;
         }
 

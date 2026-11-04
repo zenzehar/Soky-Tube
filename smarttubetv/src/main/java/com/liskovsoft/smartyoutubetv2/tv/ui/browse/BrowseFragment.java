@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.view.View;
 import android.view.ViewGroup;
 
@@ -56,6 +57,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     private boolean mIsFragmentCreated;
     private boolean mFocusOnContent;
     private CrashRestorer mCrashRestorer;
+    private MobileSectionsDrawer mMobileDrawer;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -95,8 +97,23 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         View root = super.onCreateView(inflater, container, savedInstanceState);
 
         mProgressBarManager.setRootView((ViewGroup) root);
-
+        if (MobileUi.isHandheld(getContext())) {
+            mMobileDrawer = new MobileSectionsDrawer(this, root);
+        }
         return root;
+    }
+
+    /** Back first closes the single original section drawer. */
+    public boolean closeMobileDrawer() {
+        if (mMobileDrawer == null || !mMobileDrawer.isOpen()) return false;
+        mMobileDrawer.hide();
+        return true;
+    }
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration config) {
+        super.onConfigurationChanged(config);
+        if (mMobileDrawer != null) mMobileDrawer.resize();
     }
 
     @Override
@@ -105,9 +122,23 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
         setupEventListeners();
 
+        // The phone has a native-size hamburger/search toolbar in BrowseActivity.
+        // Hide Leanback's oversized TV header to avoid showing two navigation bars.
+        if (MobileUi.isHandheld(getContext()) && getTitleView() != null) {
+            getTitleView().setVisibility(View.GONE);
+        }
+
         prepareEntranceTransition();
 
         mBrowsePresenter.onViewInitialized();
+
+        // On a narrow touch device start with full-width content; the new
+        // Sections button restores access to the existing Leanback sidebar.
+        if (MobileUi.isHandheld(getContext()) && getView() != null) {
+            getView().post(() -> {
+                if (isAdded()) startHeadersTransitionSafe(false);
+            });
+        }
 
         // Restore state after crash
         mCrashRestorer.restoreHeader((idx, video) -> {
@@ -128,11 +159,17 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                     long headerId = row.getHeaderItem().getId();
                     int newPosition = indexOf(headerId);
 
-                    if (getHeadersSupportFragment().getSelectedPosition() != newPosition) {
-                        // touch screen support
+                    if (MobileUi.isHandheld(getContext())) {
+                        // On touch: one tap selects the section and dismisses the original sidebar.
+                        if (getSelectedPosition() != newPosition) {
+                            selectSection(newPosition, true);
+                        } else {
+                            mBrowsePresenter.onSectionFocused((int) headerId);
+                        }
+                        if (mMobileDrawer != null) mMobileDrawer.hide();
+                    } else if (getHeadersSupportFragment().getSelectedPosition() != newPosition) {
                         getHeadersSupportFragment().setSelectedPosition(newPosition);
                     } else {
-                        // update section when clicked or pressed
                         mBrowsePresenter.onSectionFocused((int) headerId);
                         startHeadersTransitionSafe(false);
                     }
@@ -185,7 +222,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             return;
         }
 
-        setHeadersState(HEADERS_ENABLED);
+        setHeadersState(MobileUi.isHandheld(getContext()) ? HEADERS_HIDDEN : HEADERS_ENABLED);
         setHeadersTransitionOnBackEnabled(true);
 
         int brandColorRes = Helpers.getThemeAttr(getContext(), R.attr.brandColor);
@@ -324,6 +361,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
     @Override
     public void selectSection(int index, boolean focusOnContent) {
+        if (mMobileDrawer != null) mMobileDrawer.hide();
         if (index >= 0 && mSectionRowAdapter.size() > 0) {
             mFocusOnContent = focusOnContent; // focus after header transition
 
@@ -343,7 +381,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
     @Override
     public void focusOnContent() {
-        startHeadersTransitionSafe(false);
+        if (!MobileUi.isHandheld(getContext())) startHeadersTransitionSafe(false);
         if (getMainFragment() != null && getMainFragment().getView() != null) {
             getMainFragment().getView().requestFocus();
         }
@@ -384,8 +422,49 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     /**
      * Fix: IllegalStateException: "Can not perform this action after onSaveInstanceState"
      */
+    /** Phone/tablet sections menu reuses the same underlying sections and selection logic. */
+    public boolean selectMobileSectionByName(String name) {
+        if (mSectionRowAdapter == null || name == null) return false;
+        String target = name.toLowerCase(java.util.Locale.ROOT);
+        for (int i = 0; i < mSectionRowAdapter.size(); i++) {
+            Object value = mSectionRowAdapter.get(i);
+            if (!(value instanceof PageRow)) continue;
+            HeaderItem header = ((PageRow) value).getHeaderItem();
+            if (header != null && header.getName() != null &&
+                    header.getName().toLowerCase(java.util.Locale.ROOT).contains(target)) {
+                selectSection(i, true);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Open the existing Leanback sections sidebar. Never show a second PopupMenu. */
+    public void showMobileSections(android.view.View anchor) {
+        if (MobileUi.isHandheld(getContext())) {
+            if (mMobileDrawer != null) mMobileDrawer.toggle();
+        } else {
+            startHeadersTransitionSafe(true);
+        }
+    }
+
+    public void openMobileSections() {
+        if (MobileUi.isHandheld(getContext())) {
+            if (mMobileDrawer != null) mMobileDrawer.show();
+        } else {
+            startHeadersTransitionSafe(true);
+        }
+    }
+
     private void startHeadersTransitionSafe(boolean withHeaders) {
-        // Fix: IllegalStateException: "Can not perform this action after onSaveInstanceState"
+        if (MobileUi.isHandheld(getContext())) {
+            if (mMobileDrawer != null) {
+                if (withHeaders) mMobileDrawer.show();
+                else mMobileDrawer.hide();
+            }
+            return;
+        }
+        // TV: retain the original Leanback transition unchanged.
         if (!Utils.checkActivity(getActivity())) {
             return;
         }
@@ -441,6 +520,8 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
     @Override
     public void onDestroyView() {
+        if (mMobileDrawer != null) mMobileDrawer.hide();
+        mMobileDrawer = null;
         mSectionFragmentFactory.cleanup();
 
         super.onDestroyView();
@@ -478,6 +559,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
      * More info: {@link TitleHelper}
      */
     private void fixInvisibleSearchOrb() {
+        if (MobileUi.isHandheld(getContext())) return;
         if (isShowingTitle() && getTitleView() != null && getTitleView().getVisibility() != View.VISIBLE) {
             getTitleView().setVisibility(View.VISIBLE);
         }
