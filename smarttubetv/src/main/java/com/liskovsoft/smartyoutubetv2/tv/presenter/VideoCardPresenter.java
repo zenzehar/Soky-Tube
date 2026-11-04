@@ -6,6 +6,7 @@ import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.os.Build.VERSION;
 import android.util.Pair;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -143,6 +144,10 @@ public class VideoCardPresenter extends LongClickPresenter {
             cardView.setMute(mCardPreviewType == MainUIData.CARD_PREVIEW_MUTED);
         }
 
+        if (MobileUi.isHandheld(context)) {
+            // Recompute after phone rotation or tablet window resize.
+            updateDimensions(context);
+        }
         cardView.setMainImageDimensions(mWidth, mHeight);
 
         if (context instanceof Activity && ((Activity) context).isDestroyed()) {
