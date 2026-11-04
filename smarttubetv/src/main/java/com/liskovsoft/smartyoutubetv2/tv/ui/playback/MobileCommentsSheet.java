@@ -39,6 +39,8 @@ final class MobileCommentsSheet {
     private boolean fetching = true;
     private boolean closed;
     private int loadedCount;
+    private View activityDecor;
+    private View.OnLayoutChangeListener windowResizeListener;
 
     private int dp(float value) { return MobileUi.dp(activity, value); }
 
@@ -98,6 +100,8 @@ final class MobileCommentsSheet {
         dialog.setContentView(sheet);
         dialog.setOnDismissListener(d -> {
             closed = true;
+            if (activityDecor != null && windowResizeListener != null)
+                activityDecor.removeOnLayoutChangeListener(windowResizeListener);
             receiver.setCallback(null);
             receiver.onFinish(null);
         });
@@ -106,9 +110,15 @@ final class MobileCommentsSheet {
         if (window != null) {
             window.setBackgroundDrawableResource(android.R.color.transparent);
             window.setGravity(Gravity.BOTTOM);
-            int width = activity.getResources().getDisplayMetrics().widthPixels;
-            int height = activity.getResources().getDisplayMetrics().heightPixels;
-            window.setLayout(width,Math.max(dp(180),(int)(height*.82f)));
+        }
+        resizeSheet();
+        activityDecor = activity.getWindow().getDecorView();
+        if (activityDecor != null) {
+            windowResizeListener = (v,l,t,r,b,ol,ot,orr,ob) -> {
+                if ((r-l)!=(orr-ol) || (b-t)!=(ob-ot))
+                    main.post(this::resizeSheet);
+            };
+            activityDecor.addOnLayoutChangeListener(windowResizeListener);
         }
         receiver.setCallback(new CommentsReceiver.Callback() {
             @Override public void onCommentGroup(CommentGroup loaded) {
@@ -126,6 +136,28 @@ final class MobileCommentsSheet {
             }
         });
         receiver.onStart();
+    }
+
+    private void resizeSheet() {
+        if (closed || dialog.getWindow() == null || activity.isFinishing()) return;
+        int contentWidth = activity.getWindow().getDecorView().getWidth();
+        int contentHeight = activity.getWindow().getDecorView().getHeight();
+        float density = Math.max(0.1f,
+                activity.getResources().getDisplayMetrics().density);
+        if (contentWidth <= 0) contentWidth = activity.getResources().getConfiguration()
+                .screenWidthDp > 0 ? Math.round(
+                activity.getResources().getConfiguration().screenWidthDp * density)
+                : activity.getResources().getDisplayMetrics().widthPixels;
+        if (contentHeight <= 0) contentHeight = activity.getResources().getConfiguration()
+                .screenHeightDp > 0 ? Math.round(
+                activity.getResources().getConfiguration().screenHeightDp * density)
+                : activity.getResources().getDisplayMetrics().heightPixels;
+        int width = contentWidth / density >= 600f
+                ? Math.min(contentWidth - dp(32),dp(640))
+                : ViewGroup.LayoutParams.MATCH_PARENT;
+        int height = Math.max(dp(180),Math.min(contentHeight,
+                Math.round(contentHeight * .82f)));
+        dialog.getWindow().setLayout(width,height);
     }
 
     static void show(PlaybackActivity activity, CommentsReceiver receiver, String title) {
