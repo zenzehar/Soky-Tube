@@ -2,6 +2,10 @@ package com.liskovsoft.smartyoutubetv2.tv.ui.playback;
 
 import android.annotation.TargetApi;
 import android.app.PictureInPictureParams;
+import android.util.Rational;
+import android.graphics.Rect;
+import android.content.Intent;
+import android.view.View;
 import android.os.Build;
 import android.os.Bundle;
 import android.content.res.Configuration;
@@ -38,6 +42,8 @@ public class PlaybackActivity extends LeanbackActivity {
     private boolean gamepadTriggerPressed = false;
     private PlaybackFragment mPlaybackFragment;
     private MobileWatchPage mMobileWatch;
+    private boolean mMobileAudioOnly;
+    private boolean mMobilePipTransition;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -68,6 +74,11 @@ public class PlaybackActivity extends LeanbackActivity {
 
     void onMobileVideoChanged(com.liskovsoft.smartyoutubetv2.common.app.models.data.Video video) {
         if (mMobileWatch != null) mMobileWatch.onVideoChanged(video);
+        if (MobileUi.isHandheld(this) && video != null && mPlaybackFragment != null) {
+            MobilePlaybackService.start(this);
+            MobilePlaybackService.refresh();
+            updateMobilePipParams();
+        }
     }
     void onMobileSuggestionsChanged(androidx.leanback.widget.ObjectAdapter rows) {
         if (mMobileWatch != null) mMobileWatch.onSuggestions(rows);
@@ -75,14 +86,93 @@ public class PlaybackActivity extends LeanbackActivity {
     void onMobileControlsRequested(boolean show) {
         if (mMobileWatch != null) mMobileWatch.setControlsShown(show);
     }
+    public void startMobileBackgroundAudio() {
+        if (!MobileUi.isHandheld(this) || mPlaybackFragment == null) return;
+        mMobileAudioOnly = true;
+        mMobilePipTransition = false;
+        mPlaybackFragment.keepMobilePlaybackInBackground(true);
+        MobilePlaybackService.start(this);
+        // The foreground session owns media notification / steering buttons.
+        // Keep the existing ExoPlayer rather than duplicating audio playback.
+        moveTaskToBack(true);
+    }
+
+    public void enterMobilePip(boolean browse) {
+        if (!MobileUi.isHandheld(this) || mPlaybackFragment == null ||
+                Build.VERSION.SDK_INT < 26 || !getPackageManager()
+                .hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE))
+            return;
+        if (isInPipMode()) return;
+        mMobileAudioOnly = false;
+        mMobilePipTransition = true;
+        mPlaybackFragment.keepMobilePlaybackInBackground(true);
+        MobilePlaybackService.start(this);
+        try {
+            updateMobilePipParams();
+            if (enterPictureInPictureMode(new PictureInPictureParams.Builder()
+                    .setAspectRatio(new Rational(isMobileShorts() ? 9 : 16,
+                            isMobileShorts() ? 16 : 9)).build())) {
+                if (browse) {
+                    // PiP remains visible while the Browse activity comes to the
+                    // foreground. Do not instantiate or attach a second player.
+                    getWindow().getDecorView().postDelayed(() -> {
+                        if (!isFinishing() && isInPipMode()) {
+                            Intent intent = new Intent(this,
+                              com.liskovsoft.smartyoutubetv2.tv.ui.browse.BrowseActivity.class);
+                            startActivity(intent);
+                        }
+                    }, 180);
+                }
+            }
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            Log.e(TAG, "Mobile PiP unavailable: " + e.getMessage());
+            mMobilePipTransition = false;
+        }
+    }
+
+    private boolean isMobileShorts() {
+        return mPlaybackFragment != null && mPlaybackFragment.getVideo() != null &&
+                mPlaybackFragment.getVideo().isShorts;
+    }
+
+    private void updateMobilePipParams() {
+        if (!MobileUi.isHandheld(this) || Build.VERSION.SDK_INT < 26) return;
+        PictureInPictureParams.Builder params = new PictureInPictureParams.Builder()
+                .setAspectRatio(new Rational(isMobileShorts() ? 9 : 16,
+                        isMobileShorts() ? 16 : 9));
+        View viewport = findViewById(R.id.mobile_player_frame);
+        if (viewport != null && viewport.getWidth() > 0 && viewport.getHeight() > 0) {
+            Rect bounds = new Rect();
+            if (viewport.getGlobalVisibleRect(bounds)) params.setSourceRectHint(bounds);
+        }
+        if (Build.VERSION.SDK_INT >= 31) {
+            params.setAutoEnterEnabled(!mMobileAudioOnly && mPlaybackFragment != null
+                    && mPlaybackFragment.getPlayWhenReady());
+            params.setSeamlessResizeEnabled(true);
+        }
+        try {
+            setPictureInPictureParams(params.build());
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            Log.e(TAG, "Unable to update PiP parameters: " + e.getMessage());
+        }
+    }
+
     @Override protected void onResume() {
         super.onResume();
         if (mMobileWatch != null) mMobileWatch.resume();
+        if (MobileUi.isHandheld(this)) {
+            mMobileAudioOnly = false;
+            updateMobilePipParams();
+        }
         // Only the compact mobile touch player is shown in the video area.
         // The TV Leanback control row remains hidden on handheld devices.
     }
     @Override protected void onStop() {
         if (mMobileWatch != null) mMobileWatch.stop();
+        if (MobileUi.isHandheld(this) && mPlaybackFragment != null &&
+                mPlaybackFragment.getPlayWhenReady()) {
+            mPlaybackFragment.keepMobilePlaybackInBackground(true);
+        }
         super.onStop();
     }
     @Override
@@ -293,7 +383,11 @@ public class PlaybackActivity extends LeanbackActivity {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
 
         mPlaybackFragment.onPIPChanged(isInPictureInPictureMode);
-        if (isInPictureInPictureMode && mMobileWatch != null) mMobileWatch.setControlsShown(false);
+        if (mMobileWatch != null) {
+            mMobileWatch.setPipMode(isInPictureInPictureMode);
+            mMobileWatch.setControlsShown(!isInPictureInPictureMode);
+        }
+        if (!isInPictureInPictureMode) mMobilePipTransition = false;
     }
 
     /**
@@ -301,6 +395,20 @@ public class PlaybackActivity extends LeanbackActivity {
      */
     @Override
     public void onUserLeaveHint() {
+        if (MobileUi.isHandheld(this)) {
+            if (mMobileAudioOnly) {
+                MobilePlaybackService.start(this);
+                return;
+            }
+            if (mPlaybackFragment != null && mPlaybackFragment.getPlayWhenReady()) {
+                MobilePlaybackService.start(this);
+                // Android 12+ auto-enter is smoother; older phones need an
+                // explicit entry on Home/recents gesture or hardware button.
+                if (Build.VERSION.SDK_INT < 31) enterMobilePip(false);
+                else updateMobilePipParams();
+            }
+            return;
+        }
         // Check that user not open dialog/search activity instead of really leaving the activity
         // Activity may be overlapped by the dialog, back is pressed or new view started
         if (isBackPressed() || isFinishing() || getViewManager().isNewViewPending() || getGeneralData().getBackgroundPlaybackShortcut() == GeneralData.BACKGROUND_PLAYBACK_SHORTCUT_BACK) {
