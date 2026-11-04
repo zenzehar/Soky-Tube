@@ -70,6 +70,11 @@ public final class MobileUi {
         return Math.max(1f, cols == 1 ? usable : Math.min(MAX_CARD_WIDTH_DP, usable / cols));
     }
 
+    /** Full-width YouTube-style feed in portrait; responsive grids on large windows. */
+    public static int feedColumnsForWidthDp(float windowWidthDp) {
+        return windowWidthDp >= 1080f ? 3 : windowWidthDp >= 600f ? 2 : 1;
+    }
+
     public static int columns(Context context, int cardWidthResId) {
         return columnsForWidthDp(windowWidthDp(context),
                 cardWidthResId == R.dimen.shorts_card_width);
