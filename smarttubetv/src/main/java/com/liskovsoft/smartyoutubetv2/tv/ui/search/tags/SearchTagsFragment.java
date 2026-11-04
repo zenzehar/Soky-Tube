@@ -55,6 +55,7 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
     private CrashRestorer mCrashRestorer;
     private MobileSearchPanel mMobilePanel;
     private MediaServiceSearchTagProvider mMobileTagsProvider;
+    private String mMobileSearchPageKey;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -99,6 +100,7 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
         mMobilePanel = new MobileSearchPanel(requireContext(), new MobileSearchPanel.Actions() {
             @Override public void submit(String query) { loadSearchResult(query); }
             @Override public void openVideo(Video video) { mSearchPresenter.onVideoItemClicked(video); }
+            @Override public void visible(Video video) { checkScrollEnd(video); }
             @Override public void goBack() {
                 if (getActivity() != null) getActivity().onBackPressed();
             }
@@ -379,7 +381,12 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
         int index = resultsAdapter.indexOf(item);
 
         if (index > (size - ViewUtil.ROW_SCROLL_CONTINUE_NUM)) {
-            mSearchPresenter.onScrollEnd((Video) resultsAdapter.get(size - 1));
+            Video last = (Video) resultsAdapter.get(size - 1);
+            String key = last.videoId != null ? last.videoId : last.toString();
+            if (!MobileUi.isHandheld(getContext()) || !key.equals(mMobileSearchPageKey)) {
+                mMobileSearchPageKey = key;
+                mSearchPresenter.onScrollEnd(last);
+            }
         }
     }
 
@@ -464,6 +471,7 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
     }
 
     private void loadSearchResult(String searchQuery) {
+        if (mMobilePanel != null && !TextUtils.equals(searchQuery, mSearchQuery)) mMobileSearchPageKey = null;
         // Don't show suggested videos (empty query).
         // They are inaccurate and usually have problems with layout.
         if (!TextUtils.isEmpty(searchQuery) && !searchQuery.equals(mSearchQuery)) {
