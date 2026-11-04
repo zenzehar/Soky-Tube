@@ -67,7 +67,7 @@ public final class MobileUi {
         float usable = Math.max(0f, widthDp - SIDE_INSET_DP * 2f
                 - ITEM_GAP_DP * (cols - 1));
         // Never force a minimum wider than the window.
-        return Math.max(1f, Math.min(MAX_CARD_WIDTH_DP, usable / cols));
+        return Math.max(1f, cols == 1 ? usable : Math.min(MAX_CARD_WIDTH_DP, usable / cols));
     }
 
     public static int columns(Context context, int cardWidthResId) {
