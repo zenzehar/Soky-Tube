@@ -58,12 +58,13 @@ public class VideoCardPresenter extends LongClickPresenter {
         mSelectedTextColor =
                 ContextCompat.getColor(context, R.color.card_selected_text_grey);
 
-        mCardPreviewType = getCardPreviewType(context);
+        // Avoid costly focus-triggered video previews during finger scrolling.
+        mCardPreviewType = MobileUi.isHandheld(context) ? MainUIData.CARD_PREVIEW_DISABLED : getCardPreviewType(context);
         mThumbQuality = getThumbQuality(context);
 
-        boolean isCardMultilineTitleEnabled = isCardMultilineTitleEnabled(context);
+        boolean isCardMultilineTitleEnabled = MobileUi.isHandheld(context) || isCardMultilineTitleEnabled(context);
         boolean isCardMultilineSubtitleEnabled = isCardMultilineSubtitleEnabled(context);
-        boolean isCardTextAutoScrollEnabled = isCardTextAutoScrollEnabled(context);
+        boolean isCardTextAutoScrollEnabled = !MobileUi.isHandheld(context) && isCardTextAutoScrollEnabled(context);
         float cardTextScrollSpeed = getCardTextScrollSpeed(context);
 
         updateDimensions(context);
