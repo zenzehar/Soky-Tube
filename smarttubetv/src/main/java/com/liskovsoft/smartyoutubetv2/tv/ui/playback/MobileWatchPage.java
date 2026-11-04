@@ -36,6 +36,7 @@ final class MobileWatchPage {
     private final MobileVideoFeed feed;
     private final MobileTouchPlayerControls touchControls;
     private boolean isShortVideo;
+    private boolean inPip;
 
     MobileWatchPage(PlaybackActivity activity, PlaybackFragment player) {
         this.activity = activity;
@@ -190,11 +191,24 @@ final class MobileWatchPage {
     void onSuggestions(ObjectAdapter rows) {
         feed.scheduleRows(rows);
     }
+    void setPipMode(boolean pip) {
+        inPip = pip;
+        touchControls.setVisible(false);
+        applyLayout();
+    }
+
     void applyLayout() {
         if (videoFrame.getParent() == null) return;
         boolean landscape = activity.getResources().getConfiguration().orientation ==
                 Configuration.ORIENTATION_LANDSCAPE;
         LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) videoFrame.getLayoutParams();
+        if (inPip) {
+            params.height = 0;
+            params.weight = 1f;
+            below.setVisibility(View.GONE);
+            videoFrame.setLayoutParams(params);
+            return;
+        }
         if (landscape) {
             params.height = 0;
             params.weight = 1f;
