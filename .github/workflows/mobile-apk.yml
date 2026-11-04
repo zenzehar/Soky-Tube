@@ -6,6 +6,10 @@ on:
       - 'feature/mobile-touch-android-*'
   workflow_dispatch:
 
+concurrency:
+  group: soky-mobile-preview-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -31,9 +35,12 @@ jobs:
           test -n "$SDK_MANAGER"
           yes | "$SDK_MANAGER" --licenses > /dev/null || true
           "$SDK_MANAGER" "platforms;android-34" "build-tools;34.0.0" "ndk;21.0.6113669"
-      - name: Build installable debug-signed mobile APK
+      - name: Test responsive phone and tablet sizing
         run: |
           chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileUiSizingTest"
+      - name: Build installable debug-signed mobile APK
+        run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
       - name: Stage APKs
         run: |
