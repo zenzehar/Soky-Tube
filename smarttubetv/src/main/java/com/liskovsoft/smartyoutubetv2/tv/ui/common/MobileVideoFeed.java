@@ -254,7 +254,7 @@ public final class MobileVideoFeed {
         public VideoHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
             LinearLayout card = new LinearLayout(context);
             card.setOrientation(LinearLayout.VERTICAL);
-            card.setLayoutParams(new RecyclerView.LayoutParams(
+            card.setLayoutParams(new GridLayoutManager.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             card.setBackgroundColor(BACKGROUND);
             card.setPadding(0, 0, 0, dp(12));
