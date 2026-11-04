@@ -143,11 +143,19 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
                     long headerId = row.getHeaderItem().getId();
                     int newPosition = indexOf(headerId);
 
-                    if (getHeadersSupportFragment().getSelectedPosition() != newPosition) {
-                        // touch screen support
+                    if (MobileUi.isHandheld(getContext())) {
+                        // On touch: one tap selects the section and dismisses the original sidebar.
+                        if (getSelectedPosition() != newPosition) {
+                            selectSection(newPosition, true);
+                        } else {
+                            mBrowsePresenter.onSectionFocused((int) headerId);
+                        }
+                        if (getView() != null) getView().post(() -> {
+                            if (isAdded()) startHeadersTransitionSafe(false);
+                        });
+                    } else if (getHeadersSupportFragment().getSelectedPosition() != newPosition) {
                         getHeadersSupportFragment().setSelectedPosition(newPosition);
                     } else {
-                        // update section when clicked or pressed
                         mBrowsePresenter.onSectionFocused((int) headerId);
                         startHeadersTransitionSafe(false);
                     }
@@ -201,7 +209,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         }
 
         setHeadersState(MobileUi.isHandheld(getContext()) ? HEADERS_HIDDEN : HEADERS_ENABLED);
-        setHeadersTransitionOnBackEnabled(!MobileUi.isHandheld(getContext()));
+        setHeadersTransitionOnBackEnabled(true);
 
         int brandColorRes = Helpers.getThemeAttr(getContext(), R.attr.brandColor);
         int brandAccentColorRes = Helpers.getThemeAttr(getContext(), R.attr.brandAccentColor);
@@ -416,31 +424,20 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         return false;
     }
 
+    /** Open the existing Leanback sections sidebar. Never show a second PopupMenu. */
     public void showMobileSections(android.view.View anchor) {
-        if (anchor == null || mSectionRowAdapter == null) return;
-        android.widget.PopupMenu sections = new android.widget.PopupMenu(requireContext(), anchor);
-        for (int i = 0; i < mSectionRowAdapter.size(); i++) {
-            Object item = mSectionRowAdapter.get(i);
-            if (!(item instanceof PageRow)) continue;
-            HeaderItem header = ((PageRow) item).getHeaderItem();
-            if (header == null) continue;
-            final int position = i;
-            String label = header.getName() != null ? header.getName() : "Section " + (i + 1);
-            sections.getMenu().add(label).setOnMenuItemClickListener(menuItem -> {
-                selectSection(position, true);
-                return true;
-            });
+        if (MobileUi.isHandheld(getContext())) {
+            startHeadersTransitionSafe(!isShowingHeaders());
         }
-        sections.show();
     }
 
     public void openMobileSections() {
-        if (!MobileUi.isHandheld(getContext())) startHeadersTransitionSafe(true);
+        startHeadersTransitionSafe(true);
     }
 
     private void startHeadersTransitionSafe(boolean withHeaders) {
         // Fix: IllegalStateException: "Can not perform this action after onSaveInstanceState"
-        if (MobileUi.isHandheld(getContext()) || !Utils.checkActivity(getActivity())) {
+        if (!Utils.checkActivity(getActivity())) {
             return;
         }
 
