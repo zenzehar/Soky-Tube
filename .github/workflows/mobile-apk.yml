@@ -63,8 +63,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-media-20261105 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7 - Quality, PiP and Media Controls (5 Nov 2026)" \
-            --notes "Mobile v7: YouTube-style playback gear and real resolution choices, native Android PiP, mobile media foreground service, notification controls and Android Auto audio session. Preview: car hardware/on-device validation pending. Separate package com.sokytube.mobile. Debug signed. Physical device testing required." \
+          gh release create mobile-preview-v7-comments-sponsor-20261105 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.1 - Comments and SponsorBlock Markers (5 Nov 2026)" \
+            --notes "Mobile v7.1: functional YouTube-like comments/replies with touch sheets, working SponsorBlock category markers painted on the native player progress track, including late duration updates and chapters; adds PiP/background/notification and driver-safe media controls from v7. Preview, device testing required." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-media-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-comments-sponsor-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
