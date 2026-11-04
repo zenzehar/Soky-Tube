@@ -210,12 +210,17 @@ final class MobileCommentsSheet {
         content.addView(body);
         String likes = item.getLikeCount();
         if (likes != null && !likes.isEmpty()) {
-            TextView like = label("♡  "+ likes,13,0xFF646464,false);
-            like.setPadding(0,dp(4),0,dp(4));
+            TextView like = label("👍  "+ likes,13,0xFF646464,false);
+            like.setPadding(0,dp(7),0,dp(7));
+            like.setContentDescription("Like comment");
             content.addView(like);
+            like.setOnClickListener(v -> receiver.onCommentLongClicked(item));
         }
         if (item.getNestedCommentsKey() != null) {
-            TextView replies = label("View replies  ›",14,0xFF1767B2,true);
+            String replyCount = item.getReplyCount();
+            TextView replies = label(replyCount == null || replyCount.isEmpty()
+                    ? "View replies  ›" : "View " + replyCount + " replies  ›",
+                    14,0xFF1767B2,true);
             replies.setPadding(0,dp(8),0,dp(7));
             content.addView(replies);
             replies.setOnClickListener(v -> receiver.onCommentClicked(item));
