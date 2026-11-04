@@ -106,6 +106,12 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
         setupEventListeners();
 
+        // The phone has a native-size hamburger/search toolbar in BrowseActivity.
+        // Hide Leanback's oversized TV header to avoid showing two navigation bars.
+        if (MobileUi.isHandheld(getContext()) && getTitleView() != null) {
+            getTitleView().setVisibility(View.GONE);
+        }
+
         prepareEntranceTransition();
 
         mBrowsePresenter.onViewInitialized();
@@ -492,6 +498,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
      * More info: {@link TitleHelper}
      */
     private void fixInvisibleSearchOrb() {
+        if (MobileUi.isHandheld(getContext())) return;
         if (isShowingTitle() && getTitleView() != null && getTitleView().getVisibility() != View.VISIBLE) {
             getTitleView().setVisibility(View.VISIBLE);
         }
