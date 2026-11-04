@@ -42,6 +42,7 @@ final class MobileSearchPanel {
     interface Actions {
         void submit(String query);
         void openVideo(Video video);
+        void visible(Video video);
         void goBack();
     }
 
@@ -113,6 +114,7 @@ final class MobileSearchPanel {
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         results = new MobileVideoFeed(context, actions::openVideo, false);
+        results.setOnVideoVisible(actions::visible);
         results.getView().setVisibility(View.GONE);
         root.addView(results.getView(), new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
