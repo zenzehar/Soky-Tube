@@ -1,6 +1,16 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.playback;
 
 import android.content.Context;
+import android.app.Dialog;
+import android.graphics.drawable.ColorDrawable;
+import android.text.TextUtils;
+import android.widget.ScrollView;
+import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.LinkedHashMap;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
@@ -202,14 +212,170 @@ final class MobileTouchPlayerControls {
         scheduleDismiss();
     }
 
+    // YouTube-style navigation hierarchy with live options from the actual
+    // ExoPlayer tracks, not hard-coded '4K/1080p' choices that may not exist.
     private void showOptions() {
-        PopupMenu options = new PopupMenu(activity, top.getChildAt(top.getChildCount() - 1));
-        options.getMenu().add("Quality").setOnMenuItemClickListener(i -> runAction(R.id.lb_control_high_quality));
-        options.getMenu().add("Playback speed").setOnMenuItemClickListener(i -> runAction(R.id.action_video_speed));
-        options.getMenu().add("Subtitles").setOnMenuItemClickListener(i -> runAction(R.id.lb_control_closed_captioning));
-        options.getMenu().add("Repeat").setOnMenuItemClickListener(i -> runAction(R.id.action_repeat));
-        options.getMenu().add("Video information").setOnMenuItemClickListener(i -> runAction(R.id.action_info));
-        options.show();
+        showSheet("Settings", null,
+                new String[]{"Quality", "Playback speed", "Captions", "Loop video",
+                        "Picture-in-picture", "Background audio", "Video information"},
+                new Runnable[]{this::showQuality, this::showSpeeds, this::showCaptions,
+                        () -> runAction(R.id.action_repeat),
+                        () -> activity.enterMobilePip(false),
+                        activity::startMobileBackgroundAudio,
+                        () -> runAction(R.id.action_info)});
+    }
+
+    private void showQuality() {
+        FormatItem selected = player.getVideoFormat();
+        String current = selected != null && selected.getHeight() > 0
+                && selected.getHeight() < 10000 ? selected.getHeight() + "p" : "Auto";
+        showSheet("Quality", "Current: " + current,
+                new String[]{"Auto (recommended)", "Higher picture quality",
+                        "Data saver", "Advanced"},
+                new Runnable[]{
+                        () -> player.setFormat(FormatItem.VIDEO_AUTO),
+                        () -> chooseQuality(true),
+                        () -> chooseQuality(false),
+                        this::showAdvancedQuality
+                });
+    }
+
+    private List<FormatItem> availableVideoFormats() {
+        List<FormatItem> all = player.getVideoFormats();
+        ArrayList<FormatItem> result = new ArrayList<>();
+        if (all != null) for (FormatItem track : all) {
+            if (track != null && track.getHeight() > 0
+                    && track.getWidth() > 0 && track.getHeight() < 10000) result.add(track);
+        }
+        Collections.sort(result, (left, right) -> {
+            int byHeight = Integer.compare(right.getHeight(), left.getHeight());
+            return byHeight != 0 ? byHeight :
+                    Float.compare(right.getFrameRate(), left.getFrameRate());
+        });
+        return result;
+    }
+
+    private void chooseQuality(boolean high) {
+        List<FormatItem> tracks = availableVideoFormats();
+        if (tracks.isEmpty()) {
+            android.widget.Toast.makeText(activity, "Quality options unavailable for this video",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        player.setFormat(tracks.get(high ? 0 : tracks.size() - 1));
+    }
+
+    private void showAdvancedQuality() {
+        List<FormatItem> tracks = availableVideoFormats();
+        LinkedHashMap<String,FormatItem> distinct = new LinkedHashMap<>();
+        for (FormatItem track : tracks) {
+            int height = track.getHeight();
+            int frameRate = Math.round(track.getFrameRate());
+            String label = height + "p" + (frameRate > 30 ? frameRate : "");
+            if (!distinct.containsKey(label)) distinct.put(label,track);
+        }
+        if (distinct.isEmpty()) {
+            android.widget.Toast.makeText(activity, "No video resolutions reported",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String[] labels = distinct.keySet().toArray(new String[0]);
+        Runnable[] actions = new Runnable[labels.length];
+        for (int i = 0; i < labels.length; i++) {
+            final FormatItem chosen = distinct.get(labels[i]);
+            actions[i] = () -> player.setFormat(chosen);
+        }
+        showSheet("Advanced · Quality", "Choose available video resolution", labels, actions);
+    }
+
+    private void showSpeeds() {
+        final float[] speeds = {0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f};
+        String[] labels = new String[speeds.length];
+        Runnable[] actions = new Runnable[speeds.length];
+        for (int i=0;i<speeds.length;i++) {
+            final float value = speeds[i];
+            labels[i] = (value == 1f ? "Normal" : value + "×")
+                    + (Math.abs(player.getSpeed()-value)<0.01f ? "  ✓" : "");
+            actions[i] = () -> player.setSpeed(value);
+        }
+        showSheet("Playback speed", null, labels, actions);
+    }
+
+    private void showCaptions() {
+        ArrayList<String> labels = new ArrayList<>();
+        ArrayList<Runnable> actions = new ArrayList<>();
+        labels.add("Off");
+        actions.add(() -> player.setFormat(FormatItem.SUBTITLE_NONE));
+        List<FormatItem> tracks = player.getSubtitleFormats();
+        if (tracks != null) for (FormatItem track : tracks) {
+            if (track == null || track.isDefault() || track.getLanguage() == null) continue;
+            String language = track.getLanguage();
+            labels.add(!TextUtils.isEmpty(language) ? language : "Captions");
+            actions.add(() -> player.setFormat(track));
+        }
+        showSheet("Captions", null,
+                labels.toArray(new String[0]), actions.toArray(new Runnable[0]));
+    }
+
+    private void showSheet(String title, String subtitle, String[] labels, Runnable[] actions) {
+        if (released || activity.isFinishing()) return;
+        Dialog sheet = new Dialog(activity);
+        LinearLayout layout = new LinearLayout(activity);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(16),dp(10),dp(16),dp(14));
+        layout.setBackgroundColor(0xFF202124);
+        TextView heading = new TextView(activity);
+        heading.setText(title);
+        heading.setTextColor(Color.WHITE);
+        heading.setTextSize(19);
+        heading.setPadding(dp(8),dp(10),dp(8),dp(14));
+        layout.addView(heading);
+        if (subtitle != null) {
+            TextView detail = new TextView(activity);
+            detail.setText(subtitle);
+            detail.setTextColor(0xFFCCCCCC);
+            detail.setTextSize(13);
+            detail.setPadding(dp(8),0,dp(8),dp(10));
+            layout.addView(detail);
+        }
+        ScrollView scroller = new ScrollView(activity);
+        LinearLayout rows = new LinearLayout(activity);
+        rows.setOrientation(LinearLayout.VERTICAL);
+        scroller.addView(rows);
+        for (int i=0;i<labels.length;i++) {
+            final Runnable action = actions[i];
+            TextView row = new TextView(activity);
+            row.setText(labels[i]);
+            row.setTextColor(Color.WHITE);
+            row.setTextSize(16);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(14),dp(8),dp(14),dp(8));
+            row.setMinHeight(dp(52));
+            rows.addView(row, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+            row.setOnClickListener(v -> {
+                sheet.dismiss();
+                action.run();
+                scheduleDismiss();
+            });
+        }
+        layout.addView(scroller);
+        sheet.setContentView(layout);
+        if (sheet.getWindow() != null) {
+            sheet.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            sheet.getWindow().setGravity(Gravity.BOTTOM);
+            sheet.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            int max = Math.round(activity.getResources().getDisplayMetrics().heightPixels * .76f);
+            scroller.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, Math.min(dp(labels.length*54), max)));
+        }
+        sheet.show();
+        if (sheet.getWindow() != null) {
+            sheet.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            sheet.getWindow().setGravity(Gravity.BOTTOM);
+        }
     }
 
     private boolean runAction(int id) {
