@@ -123,6 +123,10 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     private MediaSessionCompat mMediaSession;
     private MediaSessionConnector mMediaSessionConnector;
     private List<SeekBarSegment> mMobileSponsorSegments;
+    private List<Video> mMobileChapters = java.util.Collections.emptyList();
+
+    List<Video> getMobileChapters() { return mMobileChapters; }
+
 
     List<SeekBarSegment> getMobileSponsorSegments() {
         return mMobileSponsorSegments;
@@ -939,6 +943,11 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
     @Override
     public void setVideo(Video video) {
+        if (MobileUi.isHandheld(getContext())) {
+            mMobileChapters = java.util.Collections.emptyList();
+            if (getActivity() instanceof PlaybackActivity)
+                ((PlaybackActivity) getActivity()).onMobileChaptersChanged(mMobileChapters);
+        }
         mExoPlayerController.setVideo(video);
         if (MobileUi.isHandheld(getContext()) && getActivity() instanceof PlaybackActivity) {
             ((PlaybackActivity) getActivity()).onMobileVideoChanged(video);
@@ -1482,6 +1491,12 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
     @Override
     public void updateSuggestions(VideoGroup group) {
+        if (MobileUi.isHandheld(getContext()) && group != null && group.isChapters()) {
+            mMobileChapters = new java.util.ArrayList<>(group.getVideos());
+            if (getActivity() instanceof PlaybackActivity) {
+                ((PlaybackActivity) getActivity()).onMobileChaptersChanged(mMobileChapters);
+            }
+        }
         reportMobileSuggestions();
         if (mRowsAdapter == null) {
             Log.e(TAG, "Related videos row not initialized yet.");
