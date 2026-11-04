@@ -103,7 +103,12 @@ public final class MobileVideoFeed {
                 }
             }
         }); // Updating thumbnails shouldn't animate the entire screen.
+        // Narrow windows retain a small symmetric inset; no video, title,
+        // or clickable dots should extend beyond the visible app viewport.
         list.setClipToPadding(false);
+        list.setPadding(dp(6), 0, dp(6), 0);
+        root.setClipChildren(true);
+        root.setClipToPadding(true);
         root.addView(list, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         // One full-width thumbnail on portrait phones, two on wide phones and
@@ -120,8 +125,13 @@ public final class MobileVideoFeed {
                 context.getResources().getDisplayMetrics().density);
         int span = MobileUi.feedColumnsForWidthDp(widthDp);
         if (gridLayoutManager.getSpanCount() != span) {
-            gridLayoutManager.setSpanCount(span);
-            adapter.notifyDataSetChanged();
+            // Avoid re-entrant RecyclerView layout during rotation/resize.
+            list.post(() -> {
+                if (gridLayoutManager.getSpanCount() != span) {
+                    gridLayoutManager.setSpanCount(span);
+                    adapter.notifyDataSetChanged();
+                }
+            });
         }
     }
 
