@@ -76,6 +76,25 @@ public final class MobileUi {
         return windowWidthDp >= 1080f ? 3 : windowWidthDp >= 600f ? 2 : 1;
     }
 
+    /** Always fit video inside the current phone window, not the physical panel. */
+    public static float mobileVideoHeightDp(float contentWidthDp,
+                                            float usableHeightDp, boolean shorts) {
+        float desired = Math.max(1f, contentWidthDp) * (shorts ? 16f / 9f : 9f / 16f);
+        float available = Math.max(1f, usableHeightDp);
+        return Math.max(1f, Math.min(desired, shorts ? available * 0.68f : available));
+    }
+
+    /** QR codes must not overflow portrait, landscape, or split-screen windows. */
+    public static float mobileQrSizeDp(float windowWidthDp, float windowHeightDp) {
+        return Math.max(1f, Math.min(272f, Math.min(
+                Math.max(1f, windowWidthDp - 56f),
+                Math.max(104f, windowHeightDp * 0.32f))));
+    }
+
+    public static boolean compactTouchPlayer(float playerHeightDp) {
+        return playerHeightDp < 190f;
+    }
+
     public static int settingsColumnsForWidthDp(float widthDp) {
         return widthDp >= 1000f ? 3 : widthDp >= 600f ? 2 : 1;
     }
