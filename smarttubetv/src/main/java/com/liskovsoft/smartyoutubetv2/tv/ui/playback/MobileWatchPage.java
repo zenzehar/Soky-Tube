@@ -34,6 +34,8 @@ final class MobileWatchPage {
     private final FrameLayout below;
     private final TextView title, metadata, author;
     private final MobileVideoFeed feed;
+    private final MobileTouchPlayerControls touchControls;
+    private boolean isShortVideo;
 
     MobileWatchPage(PlaybackActivity activity, PlaybackFragment player) {
         this.activity = activity;
@@ -44,8 +46,9 @@ final class MobileWatchPage {
         if (screen == null || videoFrame == null || below == null)
             throw new IllegalStateException("Missing mobile watch containers");
 
-        // Do not add any view on top of the playing video. The original
-        // SmartTube playback controls receive native touch gestures directly.
+        // A single phone-only control surface delegates to the ORIGINAL
+        // playback engine; the oversized TV transport is hidden on mobile.
+        touchControls = new MobileTouchPlayerControls(activity, player, videoFrame);
         LinearLayout description = new LinearLayout(activity);
         description.setOrientation(LinearLayout.VERTICAL);
         description.setPadding(dp(14), dp(12), dp(14), dp(8));
@@ -179,6 +182,10 @@ final class MobileWatchPage {
         metadata.setText(second == null ? "" : second);
         String name = video.getAuthor();
         author.setText(name != null ? name : "Channel");
+        boolean wasShort = isShortVideo;
+        isShortVideo = video.isShorts;
+        if (wasShort != isShortVideo) videoFrame.post(this::applyLayout);
+        touchControls.setVisible(true);
     }
     void onSuggestions(ObjectAdapter rows) {
         feed.scheduleRows(rows);
@@ -199,7 +206,15 @@ final class MobileWatchPage {
         } else {
             int width = screen.getWidth() > 0 ? screen.getWidth()
                     : activity.getResources().getDisplayMetrics().widthPixels;
-            params.height = Math.round(width * 9f / 16f);
+            // Shorts are portrait videos: give them a tall portrait player,
+            // instead of shrinking them inside the 16:9 movie letterbox.
+            int availableHeight = screen.getHeight() > 0 ? screen.getHeight() :
+                    activity.getResources().getDisplayMetrics().heightPixels;
+            int ideal = isShortVideo ? Math.round(width * 16f / 9f)
+                    : Math.round(width * 9f / 16f);
+            params.height = isShortVideo
+                    ? Math.min(ideal, Math.round(availableHeight * 0.68f))
+                    : Math.min(ideal, availableHeight);
             params.weight = 0;
             below.setVisibility(View.VISIBLE);
             activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN |
@@ -220,7 +235,8 @@ final class MobileWatchPage {
     }
 
     // All player-control lifecycle operations belong to the native fragment.
-    void resume() {}
-    void stop() {}
-    void setControlsShown(boolean visible) { player.showOverlay(visible); }
+    void resume() { touchControls.resume(); }
+    void stop() { touchControls.pause(); }
+    void release() { touchControls.release(); }
+    void setControlsShown(boolean visible) { touchControls.setVisible(visible); }
 }
