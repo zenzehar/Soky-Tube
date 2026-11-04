@@ -1,6 +1,11 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.browse.video;
 
 import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.LayoutInflater;
+import android.widget.FrameLayout;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileVideoFeed;
 import android.content.res.Configuration;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.widget.Toast;
@@ -46,6 +51,8 @@ public class VideoGridFragment extends GridFragment implements VideoSection {
     private Video mSelectedItem;
     private float mVideoGridScale;
     private final Runnable mRestoreTask = this::restorePosition;
+    private MobileVideoFeed mMobileFeed;
+    private String mMobileLastPageId;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -67,6 +74,42 @@ public class VideoGridFragment extends GridFragment implements VideoSection {
         if (getMainFragmentAdapter().getFragmentHost() != null) {
             getMainFragmentAdapter().getFragmentHost().notifyDataReady(getMainFragmentAdapter());
         }
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+                             Bundle savedInstanceState) {
+        View tvGrid = super.onCreateView(inflater, container, savedInstanceState);
+        if (!MobileUi.isHandheld(getContext()) || tvGrid == null) return tvGrid;
+        FrameLayout screen = new FrameLayout(requireContext());
+        screen.addView(tvGrid, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        tvGrid.setVisibility(View.INVISIBLE);
+        mMobileFeed = new MobileVideoFeed(requireContext(), video ->
+                mMainPresenter.onVideoItemClicked(video), false);
+        mMobileFeed.setOnVideoVisible(video -> {
+            if (video == null || mGridAdapter == null || mGridAdapter.isEmpty()) return;
+            int position = mGridAdapter.indexOf(video);
+            int size = mGridAdapter.size();
+            if (position < size - ViewUtil.GRID_SCROLL_CONTINUE_NUM) return;
+            Video last = (Video) mGridAdapter.get(size - 1);
+            String key = last.videoId != null ? last.videoId : last.toString();
+            if (!key.equals(mMobileLastPageId)) {
+                mMobileLastPageId = key;
+                mMainPresenter.onScrollEnd(last);
+            }
+        });
+        screen.addView(mMobileFeed.getView(), new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        mMobileFeed.getView().post(() -> {
+            if (mMobileFeed != null) mMobileFeed.setVideos(mGridAdapter, "");
+        });
+        return screen;
+    }
+
+    @Override public void onDestroyView() {
+        mMobileFeed = null;
+        super.onDestroyView();
     }
 
     protected VideoGroupPresenter getMainPresenter() {
@@ -145,6 +188,9 @@ public class VideoGridFragment extends GridFragment implements VideoSection {
 
     @Override
     public void update(VideoGroup group) {
+        if (mMobileFeed != null) mMobileFeed.getView().postDelayed(() -> {
+            if (mMobileFeed != null) mMobileFeed.setVideos(mGridAdapter, "");
+        }, 75);
         int action = group.getAction();
 
         // Attempt to fix: IllegalStateException: Cannot call this method while RecyclerView is computing a layout or scrolling
