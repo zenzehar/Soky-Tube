@@ -34,13 +34,13 @@ public class SponsorBlockController extends BasePlayerController {
     private static final long POLL_INTERVAL_MS = 1_000;
     private static final int CONTENT_BLOCK_ID = 144;
     private MediaItemService mMediaItemService;
-    private List<SponsorSegment> mOriginalSegments;
+    private volatile List<SponsorSegment> mOriginalSegments;
     private List<SponsorSegment> mActiveSegments;
     private long mLastSkipPosMs;
     private boolean mSkipExclude;
     private Disposable mSegmentsAction;
     private Observable<List<SponsorSegment>> mCachedSegmentsAction;
-    private String mVideoId;
+    private volatile String mVideoId;
 
     public static class SegmentAction {
         public String segmentCategory;
