@@ -86,6 +86,11 @@ public class PlaybackActivity extends LeanbackActivity {
     void onMobileControlsRequested(boolean show) {
         if (mMobileWatch != null) mMobileWatch.setControlsShown(show);
     }
+    void onMobileSponsorSegmentsChanged(
+            java.util.List<com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.SeekBarSegment> segments) {
+        if (mMobileWatch != null) mMobileWatch.setSponsorSegments(segments);
+    }
+
     public void startMobileBackgroundAudio() {
         if (!MobileUi.isHandheld(this) || mPlaybackFragment == null) return;
         mMobileAudioOnly = true;
