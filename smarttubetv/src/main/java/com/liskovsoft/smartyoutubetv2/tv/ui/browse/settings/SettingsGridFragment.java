@@ -1,6 +1,11 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.browse.settings;
 
 import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.leanback.widget.ArrayObjectAdapter;
@@ -34,6 +39,8 @@ public class SettingsGridFragment extends GridFragment implements SettingsSectio
     private BrowsePresenter mMainPresenter;
     private UriBackgroundManager mBackgroundManager;
     private final List<SettingsGroup> mPendingUpdates = new ArrayList<>();
+    private MobileSettingsPanel mMobileSettings;
+    private SettingsGroup mCurrentGroup;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -49,6 +56,46 @@ public class SettingsGridFragment extends GridFragment implements SettingsSectio
         if (getMainFragmentAdapter().getFragmentHost() != null) {
             getMainFragmentAdapter().getFragmentHost().notifyDataReady(getMainFragmentAdapter());
         }
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup parent, Bundle state) {
+        View original = super.onCreateView(inflater, parent, state);
+        if (!MobileUi.isHandheld(getContext())) return original;
+        FrameLayout layout = new FrameLayout(requireContext());
+        layout.setBackgroundColor(android.graphics.Color.WHITE);
+        // Retain the original child hierarchy for Leanback's lifecycle and
+        // section presenter, but never render a second TV-style Settings grid.
+        layout.addView(original, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        original.setVisibility(View.INVISIBLE);
+        mMobileSettings = new MobileSettingsPanel(requireContext(), this::openMobileSetting);
+        layout.addView(mMobileSettings, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        if (mCurrentGroup != null) mMobileSettings.setItems(mCurrentGroup.getItems());
+        return layout;
+    }
+
+    private void openMobileSetting(SettingsItem item) {
+        if (item == null) return;
+        String password = getGeneralData().getSettingsPassword();
+        if (password == null) {
+            item.onClick.run();
+        } else {
+            SimpleEditDialog.showPassword(getContext(),
+                    getString(R.string.enter_settings_password), null,
+                    value -> {
+                        if (!Utils.passwordMatch(password, value)) return false;
+                        item.onClick.run();
+                        return true;
+                    });
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        mMobileSettings = null;
+        super.onDestroyView();
     }
 
     @Override
@@ -83,6 +130,8 @@ public class SettingsGridFragment extends GridFragment implements SettingsSectio
 
     @Override
     public void clear() {
+        mCurrentGroup = null;
+        if (mMobileSettings != null) mMobileSettings.setItems(null);
         if (mSettingsAdapter != null) {
             mSettingsAdapter.clear();
         }
@@ -106,6 +155,10 @@ public class SettingsGridFragment extends GridFragment implements SettingsSectio
 
         // Always clear (continuation not supported)
         clear();
+        mCurrentGroup = group;
+        if (mMobileSettings != null) {
+            mMobileSettings.setItems(group != null ? group.getItems() : null);
+        }
 
         if (group != null) {
             for (SettingsItem item : group.getItems()) {
