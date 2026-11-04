@@ -55,6 +55,7 @@ final class MobileTouchPlayerControls {
     private boolean tracking;
     private boolean released;
     private boolean running = true;
+    private Boolean lastMediaPlaying;
 
     private final Runnable dismiss = () -> {
         if (!tracking && player.getPlayWhenReady()) setVisible(false);
@@ -411,6 +412,10 @@ final class MobileTouchPlayerControls {
     void refresh() {
         if (released) return;
         boolean playing = player.getPlayWhenReady();
+        if (lastMediaPlaying == null || lastMediaPlaying != playing) {
+            lastMediaPlaying = playing;
+            MobilePlaybackService.refresh();
+        }
         play.setImageResource(playing ? R.drawable.mobile_ic_pause : R.drawable.mobile_ic_play);
         play.setContentDescription(playing ? "Pause video" : "Resume video");
         if (tracking) return;
