@@ -4,6 +4,7 @@ import android.media.session.PlaybackState;
 import android.os.Build.VERSION;
 import android.os.Bundle;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
+import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
