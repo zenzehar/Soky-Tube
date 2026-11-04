@@ -3,6 +3,7 @@ package com.liskovsoft.smartyoutubetv2.tv.ui.playback;
 import android.media.session.PlaybackState;
 import android.os.Build.VERSION;
 import android.os.Bundle;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
@@ -158,6 +159,15 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         super.onActivityCreated(savedInstanceState);
 
         mPlaybackPresenter.onViewInitialized();
+        if (MobileUi.isHandheld(getContext()) && getView() != null) {
+            View root = getView();
+            // Only one control layer is rendered on phones. Leanback continues
+            // providing player actions and recommendations invisibly underneath.
+            root.post(() -> {
+                View tvControls = root.findViewById(R.id.playback_controls_dock);
+                if (tvControls != null) tvControls.setVisibility(View.GONE);
+            });
+        }
 
         if (mSelectedVideoId != null) {
             mPlaybackPresenter.openVideo(mSelectedVideoId);
@@ -293,6 +303,31 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     /** Refresh only the existing controls after a phone rotation or window resize. */
+    public void mobileAction(int actionId) {
+        if (mPlaybackPresenter == null) return;
+        int state = 0;
+        try {
+            if (mPlayerGlue != null) state = mPlayerGlue.getButtonState(actionId);
+        } catch (RuntimeException ignored) {}
+        mPlaybackPresenter.onButtonClicked(actionId, state);
+    }
+
+    public void openMobileSuggestion(Video video) {
+        if (video != null && mPlaybackPresenter != null) {
+            mPlaybackPresenter.onSuggestionItemClicked(video);
+        }
+    }
+
+    private void reportMobileSuggestions() {
+        if (!MobileUi.isHandheld(getContext()) || getView() == null) return;
+        // Post AFTER the existing adapters handle the video group mutation.
+        getView().post(() -> {
+            if (getActivity() instanceof PlaybackActivity && mRowsAdapter != null) {
+                ((PlaybackActivity) getActivity()).onMobileSuggestionsChanged(mRowsAdapter);
+            }
+        });
+    }
+
     public void onMobileWindowResized() {
         if (getView() != null && mPlayerGlue != null) {
             notifyPlaybackRowChanged();
@@ -844,6 +879,9 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     @Override
     public void setVideo(Video video) {
         mExoPlayerController.setVideo(video);
+        if (MobileUi.isHandheld(getContext()) && getActivity() instanceof PlaybackActivity) {
+            ((PlaybackActivity) getActivity()).onMobileVideoChanged(video);
+        }
 
         if (mPlayerGlue != null && video != null) {
             // Preserve player formatting
@@ -1371,6 +1409,7 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
     @Override
     public void updateSuggestions(VideoGroup group) {
+        reportMobileSuggestions();
         if (mRowsAdapter == null) {
             Log.e(TAG, "Related videos row not initialized yet.");
             return;
@@ -1427,6 +1466,7 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
     @Override
     public void removeSuggestions(VideoGroup group) {
+        reportMobileSuggestions();
         if (group == null) {
             return;
         }
