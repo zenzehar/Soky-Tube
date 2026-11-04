@@ -326,6 +326,23 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     /** Refresh only the existing controls after a phone rotation or window resize. */
+    void openMobileComments() {
+        if (!(getActivity() instanceof PlaybackActivity) || mPlaybackPresenter == null) return;
+        PlaybackActivity activity = (PlaybackActivity) getActivity();
+        com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.CommentsController controller =
+                mPlaybackPresenter.getController(com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.CommentsController.class);
+        if (controller == null) return;
+        com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.CommentsReceiver receiver =
+                controller.createMobileReceiver((replies, title) ->
+                        MobileCommentsSheet.show(activity, replies, title));
+        if (receiver != null) {
+            MobileCommentsSheet.show(activity, receiver, "Comments");
+        } else {
+            android.widget.Toast.makeText(activity, "Comments unavailable for this video",
+                    android.widget.Toast.LENGTH_SHORT).show();
+        }
+    }
+
     public void mobileAction(int actionId) {
         if (mPlaybackPresenter == null) return;
         int state = 0;
