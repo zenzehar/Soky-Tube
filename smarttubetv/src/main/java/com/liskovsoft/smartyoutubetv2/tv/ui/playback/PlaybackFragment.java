@@ -122,6 +122,14 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     private boolean mIsEngineBlocked;
     private MediaSessionCompat mMediaSession;
     private MediaSessionConnector mMediaSessionConnector;
+    private boolean mKeepMobilePlaybackInBackground;
+
+    void keepMobilePlaybackInBackground(boolean enabled) {
+        if (MobileUi.isHandheld(getContext())) {
+            mKeepMobilePlaybackInBackground = enabled;
+            if (enabled) blockEngine(true);
+        }
+    }
     private DoubleTapPlayerAdapter mDoubleTapPlayerAdapter;
     private YouTubeOverlay mYouTubeOverlay;
     private Boolean mIsControlsShownPreviously;
@@ -229,7 +237,9 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     public void onStop() {
         super.onStop();
 
-        if (Util.SDK_INT > 23) {
+        if (Util.SDK_INT > 23 &&
+                !(MobileUi.isHandheld(getContext()) && mKeepMobilePlaybackInBackground
+                    && mExoPlayerController != null && mExoPlayerController.containsMedia())) {
             maybeReleasePlayer();
         }
     }
@@ -246,6 +256,7 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         mPlaybackPresenter.onViewResumed();
 
         showHideWidgets(true); // PIP mode fix
+        mKeepMobilePlaybackInBackground = false;
         blockEngine(false); // reset bg mode
         //ExoPlayerInitializer.enableAudioFocus(mPlayer, true); // Restore focus after PIP
     }
@@ -257,7 +268,8 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         // NOTE: don't move this into another place! Multiple components rely on it.
         mPlaybackPresenter.onViewPaused();
 
-        if (Util.SDK_INT <= 23) {
+        if (Util.SDK_INT <= 23 &&
+                !(MobileUi.isHandheld(getContext()) && mKeepMobilePlaybackInBackground)) {
             maybeReleasePlayer();
         }
 
@@ -485,8 +497,12 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
             mMediaSessionConnector = null;
         }
         if (mMediaSession != null) {
-            mMediaSession.setActive(false);
-            mMediaSession.release();
+            if (MobileUi.isHandheld(getContext())) {
+                MobilePlaybackService.detachMediaSession(mMediaSession);
+            } else {
+                mMediaSession.setActive(false);
+                mMediaSession.release();
+            }
             mMediaSession = null;
         }
         if (mPlayerGlue != null) {
@@ -675,8 +691,11 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         }
 
         // NOTE: No way to disable only a notifications. We need to disable the media session instead.
-        boolean disableNotifications = getPlayerTweaksData().isPlaybackNotificationsDisabled();
-        mMediaSession = new MediaSessionCompat(getContext().getApplicationContext(), getContext().getPackageName()); // NOTE: mem leak fix (SegmentTimelineElement)
+        boolean mobile = MobileUi.isHandheld(getContext());
+        boolean disableNotifications = !mobile && getPlayerTweaksData().isPlaybackNotificationsDisabled();
+        mMediaSession = mobile ? MobilePlaybackService.session(getContext())
+                : new MediaSessionCompat(getContext().getApplicationContext(),
+                        getContext().getPackageName());
         mMediaSession.setActive(!disableNotifications);
         mMediaSessionConnector = new MediaSessionConnector(mMediaSession);
 
