@@ -529,7 +529,7 @@ final class MobileTouchPlayerControls {
         }
         if (signature != sponsorMarkerSignature) {
             sponsorMarkerSignature = signature;
-            sponsorMarkers.updateSegments(source);
+            sponsorMarkers.updateTrustedSponsorSegments(source);
         }
     }
     void setChapters(List<Video> chapters) {
