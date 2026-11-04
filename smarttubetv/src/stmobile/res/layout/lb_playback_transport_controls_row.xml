@@ -72,7 +72,7 @@
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:fillViewport="false"
-            android:horizontalScrollBarEnabled="false"
+            android:scrollbars="none"
             android:overScrollMode="never">
             <FrameLayout
                 android:id="@+id/controls_dock"
@@ -93,7 +93,7 @@
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:fillViewport="false"
-            android:horizontalScrollBarEnabled="false"
+            android:scrollbars="none"
             android:overScrollMode="never">
             <FrameLayout
                 android:id="@+id/secondary_controls_dock"
