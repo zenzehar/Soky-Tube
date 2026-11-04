@@ -72,23 +72,26 @@ public class PlaybackActivity extends LeanbackActivity {
     void onMobileSuggestionsChanged(androidx.leanback.widget.ObjectAdapter rows) {
         if (mMobileWatch != null) mMobileWatch.onSuggestions(rows);
     }
+    void onMobileControlsRequested(boolean show) {
+        if (mMobileWatch != null) mMobileWatch.setControlsShown(show);
+    }
     @Override protected void onResume() {
         super.onResume();
         if (mMobileWatch != null) mMobileWatch.resume();
-        // PlaybackFragment previously hid the Leanback row for a temporary
-        // elementary menu. Restore the single original touch-ready control
-        // surface after fragment creation, without drawing a second overlay.
-        if (MobileUi.isHandheld(this) && mPlaybackFragment != null &&
-                mPlaybackFragment.getView() != null) {
-            android.view.View originalControls =
-                    mPlaybackFragment.getView().findViewById(R.id.playback_controls_dock);
-            if (originalControls != null) originalControls.setVisibility(android.view.View.VISIBLE);
-        }
+        // Only the compact mobile touch player is shown in the video area.
+        // The TV Leanback control row remains hidden on handheld devices.
     }
     @Override protected void onStop() {
         if (mMobileWatch != null) mMobileWatch.stop();
         super.onStop();
     }
+    @Override
+    protected void onDestroy() {
+        if (mMobileWatch != null) mMobileWatch.release();
+        mMobileWatch = null;
+        super.onDestroy();
+    }
+
     @Override
     protected void initTheme() {
         int playerThemeResId = MainUIData.instance(this).getColorScheme().playerThemeResId;
