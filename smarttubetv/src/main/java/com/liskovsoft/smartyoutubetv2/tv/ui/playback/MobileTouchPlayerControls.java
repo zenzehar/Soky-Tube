@@ -133,7 +133,23 @@ final class MobileTouchPlayerControls {
                 return true;
             }
         });
-        root.setOnTouchListener((v, event) -> gestures.onTouchEvent(event));
+        root.setOnTouchListener(new View.OnTouchListener() {
+            float downY, downX;
+            @Override public boolean onTouch(View v, MotionEvent event) {
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                    downY = event.getY();
+                    downX = event.getX();
+                } else if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+                    float dy = event.getY() - downY;
+                    float dx = Math.abs(event.getX() - downX);
+                    if (dy > dp(72) && Math.abs(dy) > 1.5f * dx) {
+                        activity.enterMobilePip(true);
+                        return true;
+                    }
+                }
+                return gestures.onTouchEvent(event);
+            }
+        });
         container.addView(root, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
