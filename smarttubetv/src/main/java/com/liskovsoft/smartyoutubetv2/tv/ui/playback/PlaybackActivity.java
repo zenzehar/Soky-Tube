@@ -37,16 +37,19 @@ public class PlaybackActivity extends LeanbackActivity {
     private static final float GAMEPAD_TRIGGER_INTENSITY_OFF = 0.45f;
     private boolean gamepadTriggerPressed = false;
     private PlaybackFragment mPlaybackFragment;
+    private MobileWatchPage mMobileWatch;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.fragment_playback);
+        boolean mobile = MobileUi.isHandheld(this);
+        setContentView(mobile ? R.layout.fragment_playback_mobile : R.layout.fragment_playback);
         Fragment fragment =
                 getSupportFragmentManager().findFragmentByTag(getString(R.string.playback_tag));
         if (fragment instanceof PlaybackFragment) {
             mPlaybackFragment = (PlaybackFragment) fragment;
         }
+        if (mobile && mPlaybackFragment != null) mMobileWatch = new MobileWatchPage(this, mPlaybackFragment);
     }
 
     @Override
@@ -55,9 +58,24 @@ public class PlaybackActivity extends LeanbackActivity {
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
             // Refresh original player controls, never reinstate a second overlay.
             mPlaybackFragment.onMobileWindowResized();
+            if (mMobileWatch != null) mMobileWatch.applyLayout();
         }
     }
 
+    void onMobileVideoChanged(com.liskovsoft.smartyoutubetv2.common.app.models.data.Video video) {
+        if (mMobileWatch != null) mMobileWatch.onVideoChanged(video);
+    }
+    void onMobileSuggestionsChanged(androidx.leanback.widget.ObjectAdapter rows) {
+        if (mMobileWatch != null) mMobileWatch.onSuggestions(rows);
+    }
+    @Override protected void onResume() {
+        super.onResume();
+        if (mMobileWatch != null) mMobileWatch.resume();
+    }
+    @Override protected void onStop() {
+        if (mMobileWatch != null) mMobileWatch.stop();
+        super.onStop();
+    }
     @Override
     protected void initTheme() {
         int playerThemeResId = MainUIData.instance(this).getColorScheme().playerThemeResId;
@@ -259,6 +277,7 @@ public class PlaybackActivity extends LeanbackActivity {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
 
         mPlaybackFragment.onPIPChanged(isInPictureInPictureMode);
+        if (isInPictureInPictureMode && mMobileWatch != null) mMobileWatch.setControlsShown(false);
     }
 
     /**
