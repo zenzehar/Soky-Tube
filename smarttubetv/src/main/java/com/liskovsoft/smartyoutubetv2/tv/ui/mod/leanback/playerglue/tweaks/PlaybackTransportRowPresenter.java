@@ -1187,10 +1187,10 @@ public class PlaybackTransportRowPresenter extends PlaybackRowPresenter {
             params.height = seekHeight;
             vh.mProgressBar.setLayoutParams(params);
         }
-        if (shortWindow) {
-            vh.mDescriptionDock.setVisibility(View.GONE);
-            vh.mAdditionalInfo.setVisibility(View.GONE);
-        }
+        PlaybackControlsRow row = (PlaybackControlsRow) vh.getRow();
+        boolean hasDescription = row != null && row.getItem() != null;
+        vh.mDescriptionDock.setVisibility(!shortWindow && hasDescription ? View.VISIBLE : View.GONE);
+        vh.mAdditionalInfo.setVisibility(shortWindow ? View.GONE : View.VISIBLE);
     }
 
     private static void styleMobileDescription(View root, int[] textIndex) {
