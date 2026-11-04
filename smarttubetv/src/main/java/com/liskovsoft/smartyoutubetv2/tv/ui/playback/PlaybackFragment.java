@@ -132,6 +132,21 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         return mMobileSponsorSegments;
     }
 
+    /**
+     * Recalculate SponsorBlock track fractions after playback duration is
+     * available. The controller checks the current video ID and preferences.
+     */
+    List<SeekBarSegment> getMobileSponsorSegmentsForDuration(long duration) {
+        if (duration <= 0 || mPlaybackPresenter == null) {
+            return java.util.Collections.emptyList();
+        }
+        com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.SponsorBlockController sponsor =
+                mPlaybackPresenter.getController(
+                  com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.SponsorBlockController.class);
+        return sponsor != null ? sponsor.getMobileSeekBarSegments(duration)
+                : java.util.Collections.emptyList();
+    }
+
     private boolean mKeepMobilePlaybackInBackground;
 
     void keepMobilePlaybackInBackground(boolean enabled) {
