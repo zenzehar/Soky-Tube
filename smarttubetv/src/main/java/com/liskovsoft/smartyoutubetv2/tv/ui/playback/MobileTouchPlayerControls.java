@@ -7,6 +7,7 @@ import android.text.TextUtils;
 import android.widget.ScrollView;
 import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.SeekBarSegment;
+import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -50,6 +51,10 @@ final class MobileTouchPlayerControls {
     private final LinearLayout bottom;
     private final SeekBar seek;
     private final MobileSponsorMarkersView sponsorMarkers;
+    private MobileScrubPreview scrubPreviews;
+    private final ArrayList<Video> chapterVideos = new ArrayList<>();
+    private long chapterMarkerDuration = -1;
+
     private final TextView time;
     private final ImageButton play;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -208,19 +213,25 @@ final class MobileTouchPlayerControls {
             @Override public void onStartTrackingTouch(SeekBar bar) {
                 tracking = true;
                 handler.removeCallbacks(dismiss);
+                if (scrubPreviews != null)
+                    scrubPreviews.showAt(Math.round(player.getDurationMs()
+                            * bar.getProgress()/1000d));
             }
             @Override public void onProgressChanged(SeekBar bar, int value, boolean fromUser) {
                 if (fromUser) {
                     long duration = Math.max(0L, player.getDurationMs());
-                    time.setText(duration > 0
-                            ? format(Math.round(duration * value / 1000d)) + " / " + format(duration)
-                            : "LIVE");
+                    long at = Math.round(duration * value / 1000d);
+                    String chapter = chapterTitle(at);
+                    time.setText(duration > 0 ? format(at) + " / " + format(duration) +
+                            (chapter == null ? "" : "   ·   " + chapter) : "LIVE");
+                    if (scrubPreviews != null) scrubPreviews.showAt(at);
                 }
             }
             @Override public void onStopTrackingTouch(SeekBar bar) {
                 long duration = player.getDurationMs();
                 if (duration > 0) player.setPositionMs(Math.round(duration * bar.getProgress() / 1000d));
                 tracking = false;
+                if (scrubPreviews != null) scrubPreviews.endDrag();
                 scheduleDismiss();
             }
         });
@@ -234,6 +245,28 @@ final class MobileTouchPlayerControls {
         sponsorMarkers.setClickable(false);
         bottom.addView(timeline, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(37)));
+        scrubPreviews = new MobileScrubPreview(activity, player, root);
+        seek.setOnTouchListener(new View.OnTouchListener() {
+            float downY;
+            boolean expandedThisGesture;
+            @Override public boolean onTouch(View v, MotionEvent event) {
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                    downY = event.getY();
+                    expandedThisGesture = false;
+                } else if (event.getActionMasked() == MotionEvent.ACTION_MOVE
+                        && !expandedThisGesture && downY - event.getY() > dp(32)) {
+                    expandedThisGesture = true;
+                    long duration = Math.max(0L,player.getDurationMs());
+                    if (duration > 0) scrubPreviews.showFilmstrip(
+                            Math.round(duration*seek.getProgress()/1000d),player::setPositionMs);
+                } else if (event.getActionMasked() == MotionEvent.ACTION_UP
+                        || event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                    expandedThisGesture = false;
+                }
+                // Return false to retain genuine Android SeekBar thumb handling.
+                return false;
+            }
+        });
 
         root.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,orr,ob)-> resize(r-l,b-t));
         resize(container.getWidth(), container.getHeight());
@@ -245,14 +278,33 @@ final class MobileTouchPlayerControls {
     // ExoPlayer tracks, not hard-coded '4K/1080p' choices that may not exist.
     private void showOptions() {
         showSheet("Settings", null,
-                new String[]{"Quality", "Playback speed", "Captions", "Loop video",
-                        "Picture-in-picture", "Background audio", "Video information"},
+                new String[]{"Quality", "Playback speed", "Captions", "Chapters",
+                        "Comments", "Loop video", "Picture-in-picture",
+                        "Background audio", "Video information"},
                 new Runnable[]{this::showQuality, this::showSpeeds, this::showCaptions,
+                        this::showChapters, player::openMobileComments,
                         () -> runAction(R.id.action_repeat),
                         () -> activity.enterMobilePip(false),
                         activity::startMobileBackgroundAudio,
                         () -> runAction(R.id.action_info)});
     }
+
+    private void showChapters() {
+        if (chapterVideos.isEmpty()) {
+            android.widget.Toast.makeText(activity,
+                    "This video has no chapters",android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String[] labels = new String[chapterVideos.size()];
+        Runnable[] actions = new Runnable[chapterVideos.size()];
+        for (int i=0;i<chapterVideos.size();i++) {
+            Video chapter = chapterVideos.get(i);
+            labels[i] = format(chapter.startTimeMs) + "  " + chapter.getTitleFull();
+            actions[i] = () -> player.setPositionMs(chapter.startTimeMs);
+        }
+        showSheet("Chapters", "Jump to a chapter", labels, actions);
+    }
+
 
     private void showQuality() {
         FormatItem selected = player.getVideoFormat();
@@ -422,6 +474,28 @@ final class MobileTouchPlayerControls {
     void setSponsorSegments(List<SeekBarSegment> segments) {
         sponsorMarkers.updateSegments(segments);
     }
+    void setChapters(List<Video> chapters) {
+        chapterVideos.clear();
+        if (chapters != null) chapterVideos.addAll(chapters);
+        chapterMarkerDuration = -1;
+        sponsorMarkers.updateChapters(chapterVideos,Math.max(0L,player.getDurationMs()));
+        if (scrubPreviews != null) scrubPreviews.setChapters(chapterVideos);
+    }
+
+    void onVideoChanged(Video video) {
+        if (scrubPreviews != null) scrubPreviews.setVideo(video);
+        chapterMarkerDuration = -1;
+    }
+
+    private String chapterTitle(long position) {
+        String title = null;
+        for (Video chapter : chapterVideos) {
+            if (chapter != null && chapter.startTimeMs <= position)
+                title = chapter.getTitleFull();
+        }
+        return title;
+    }
+
 
     void refresh() {
         if (released) return;
@@ -435,10 +509,19 @@ final class MobileTouchPlayerControls {
         if (tracking) return;
         long duration = Math.max(0L, player.getDurationMs());
         long position = Math.max(0L, player.getPositionMs());
+        if (scrubPreviews != null) scrubPreviews.refresh();
+        if (duration != chapterMarkerDuration) {
+            chapterMarkerDuration = duration;
+            sponsorMarkers.updateChapters(chapterVideos,duration);
+        }
         if (duration > 0) {
             seek.setEnabled(true);
             seek.setProgress((int) Math.min(1000d, position * 1000d / duration));
-            time.setText(format(position) + " / " + format(duration));
+            String chapter = chapterTitle(position);
+            time.setText(format(position) + " / " + format(duration)
+                    + (chapter == null ? "" : "   ·   " + chapter));
+            time.setSingleLine(true);
+            time.setEllipsize(TextUtils.TruncateAt.END);
         } else {
             seek.setEnabled(false);
             seek.setProgress(0);
@@ -465,6 +548,7 @@ final class MobileTouchPlayerControls {
             bottom.setLayoutParams(params);
         }
         time.setVisibility(compact ? View.GONE : View.VISIBLE);
+        if (scrubPreviews != null) scrubPreviews.resize();
     }
 
     void setVisible(boolean visible) {
@@ -476,7 +560,10 @@ final class MobileTouchPlayerControls {
             resize(root.getWidth(), root.getHeight());
             refresh();
             scheduleDismiss();
-        } else handler.removeCallbacks(dismiss);
+        } else {
+            handler.removeCallbacks(dismiss);
+            if (scrubPreviews != null) scrubPreviews.hide();
+        }
     }
 
     private void scheduleDismiss() {
@@ -502,5 +589,6 @@ final class MobileTouchPlayerControls {
         released = true;
         handler.removeCallbacks(dismiss);
         handler.removeCallbacks(progressTick);
+        if (scrubPreviews != null) scrubPreviews.release();
     }
 }
