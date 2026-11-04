@@ -87,6 +87,11 @@ public class SponsorBlockController extends BasePlayerController {
     @Override
     public void onNewVideo(Video item) {
         mSkipExclude = false;
+        // Clear the previous video's asynchronously fetched categories before
+        // this video's SponsorBlock request begins. Otherwise late-duration UI
+        // refresh can briefly paint stale segments against a different video.
+        mOriginalSegments = null;
+        mActiveSegments = null;
         if (getPlayer() != null) {
             getPlayer().setSeekBarSegments(null); // reset colors
         }
@@ -174,6 +179,8 @@ public class SponsorBlockController extends BasePlayerController {
         }
 
         if (!Helpers.equals(mVideoId, item.videoId) || mCachedSegmentsAction == null) {
+            mOriginalSegments = null;
+            mActiveSegments = null;
             // NOTE: SponsorBlock (when happened java.net.SocketTimeoutException) could block whole application with Schedulers.io()
             // Because Schedulers.io() reuses blocked threads in RxJava 2: https://github.com/ReactiveX/RxJava/issues/6542
             mCachedSegmentsAction = mMediaItemService.getSponsorSegmentsObserve(item.videoId, getSponsorBlockData().getEnabledCategories())
