@@ -1,6 +1,8 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.browse.video;
 
 import android.os.Bundle;
+import android.content.res.Configuration;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.leanback.widget.OnItemViewSelectedListener;

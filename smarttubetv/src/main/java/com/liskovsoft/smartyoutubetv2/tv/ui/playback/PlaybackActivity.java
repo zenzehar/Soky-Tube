@@ -4,6 +4,8 @@ import android.annotation.TargetApi;
 import android.app.PictureInPictureParams;
 import android.os.Build;
 import android.os.Bundle;
+import android.content.res.Configuration;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -44,6 +46,15 @@ public class PlaybackActivity extends LeanbackActivity {
                 getSupportFragmentManager().findFragmentByTag(getString(R.string.playback_tag));
         if (fragment instanceof PlaybackFragment) {
             mPlaybackFragment = (PlaybackFragment) fragment;
+        }
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
+            // Refresh original player controls, never reinstate a second overlay.
+            mPlaybackFragment.onMobileWindowResized();
         }
     }
 

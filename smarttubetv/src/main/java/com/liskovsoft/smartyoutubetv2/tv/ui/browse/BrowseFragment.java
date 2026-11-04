@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.view.View;
 import android.view.ViewGroup;
 
@@ -105,9 +106,23 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
         setupEventListeners();
 
+        // The phone has a native-size hamburger/search toolbar in BrowseActivity.
+        // Hide Leanback's oversized TV header to avoid showing two navigation bars.
+        if (MobileUi.isHandheld(getContext()) && getTitleView() != null) {
+            getTitleView().setVisibility(View.GONE);
+        }
+
         prepareEntranceTransition();
 
         mBrowsePresenter.onViewInitialized();
+
+        // On a narrow touch device start with full-width content; the new
+        // Sections button restores access to the existing Leanback sidebar.
+        if (MobileUi.isHandheld(getContext()) && getView() != null) {
+            getView().post(() -> {
+                if (isAdded()) startHeadersTransitionSafe(false);
+            });
+        }
 
         // Restore state after crash
         mCrashRestorer.restoreHeader((idx, video) -> {
@@ -185,8 +200,8 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             return;
         }
 
-        setHeadersState(HEADERS_ENABLED);
-        setHeadersTransitionOnBackEnabled(true);
+        setHeadersState(MobileUi.isHandheld(getContext()) ? HEADERS_HIDDEN : HEADERS_ENABLED);
+        setHeadersTransitionOnBackEnabled(!MobileUi.isHandheld(getContext()));
 
         int brandColorRes = Helpers.getThemeAttr(getContext(), R.attr.brandColor);
         int brandAccentColorRes = Helpers.getThemeAttr(getContext(), R.attr.brandAccentColor);
@@ -343,7 +358,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
 
     @Override
     public void focusOnContent() {
-        startHeadersTransitionSafe(false);
+        if (!MobileUi.isHandheld(getContext())) startHeadersTransitionSafe(false);
         if (getMainFragment() != null && getMainFragment().getView() != null) {
             getMainFragment().getView().requestFocus();
         }
@@ -384,9 +399,32 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
     /**
      * Fix: IllegalStateException: "Can not perform this action after onSaveInstanceState"
      */
+    /** Phone/tablet sections menu reuses the same underlying sections and selection logic. */
+    public void showMobileSections(android.view.View anchor) {
+        if (anchor == null || mSectionRowAdapter == null) return;
+        android.widget.PopupMenu sections = new android.widget.PopupMenu(requireContext(), anchor);
+        for (int i = 0; i < mSectionRowAdapter.size(); i++) {
+            Object item = mSectionRowAdapter.get(i);
+            if (!(item instanceof PageRow)) continue;
+            HeaderItem header = ((PageRow) item).getHeaderItem();
+            if (header == null) continue;
+            final int position = i;
+            String label = header.getName() != null ? header.getName() : "Section " + (i + 1);
+            sections.getMenu().add(label).setOnMenuItemClickListener(menuItem -> {
+                selectSection(position, true);
+                return true;
+            });
+        }
+        sections.show();
+    }
+
+    public void openMobileSections() {
+        if (!MobileUi.isHandheld(getContext())) startHeadersTransitionSafe(true);
+    }
+
     private void startHeadersTransitionSafe(boolean withHeaders) {
         // Fix: IllegalStateException: "Can not perform this action after onSaveInstanceState"
-        if (!Utils.checkActivity(getActivity())) {
+        if (MobileUi.isHandheld(getContext()) || !Utils.checkActivity(getActivity())) {
             return;
         }
 
@@ -478,6 +516,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
      * More info: {@link TitleHelper}
      */
     private void fixInvisibleSearchOrb() {
+        if (MobileUi.isHandheld(getContext())) return;
         if (isShowingTitle() && getTitleView() != null && getTitleView().getVisibility() != View.VISIBLE) {
             getTitleView().setVisibility(View.VISIBLE);
         }

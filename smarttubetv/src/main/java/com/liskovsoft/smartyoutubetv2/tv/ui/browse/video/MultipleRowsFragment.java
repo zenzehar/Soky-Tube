@@ -1,6 +1,8 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.browse.video;
 
 import android.os.Bundle;
+import android.content.res.Configuration;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.leanback.app.RowsSupportFragment;
@@ -65,6 +67,20 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         setupAdapter();
         setupEventListeners();
         applyPendingUpdates();
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (MobileUi.isHandheld(getContext()) && mVideoGroupAdapters != null) {
+            // Rebind visible cards so resized widths are applied when rotating
+            // without replacing the existing scroll position or data adapters.
+            for (VideoGroupObjectAdapter adapter : mVideoGroupAdapters.values()) {
+                if (adapter != null && adapter.size() > 0) {
+                    adapter.notifyItemRangeChanged(0, adapter.size());
+                }
+            }
+        }
     }
 
     protected void addHeader(ChannelHeaderCallback callback) {

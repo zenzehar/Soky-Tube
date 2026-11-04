@@ -21,6 +21,9 @@ import android.graphics.Color;
 import android.os.Build;
 import android.util.TypedValue;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.text.TextUtils;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -551,6 +554,36 @@ public class PlaybackTransportRowPresenter extends PlaybackRowPresenter {
                 }
             });
             mProgressBar.setMax(Integer.MAX_VALUE); //current progress will be a fraction of this
+            if (MobileUi.isHandheld(rootView.getContext())) {
+                // The original seek bar has a touch handler, but it concludes each
+                // MOVE as a separate seek. Keep one native seek transaction
+                // from finger-down to release instead, with live thumbnail updates.
+                mProgressBar.setOnTouchListener((view, event) -> {
+                    int action = event.getActionMasked();
+                    if (action == MotionEvent.ACTION_DOWN) {
+                        if (!startSeek()) return false;
+                        view.getParent().requestDisallowInterceptTouchEvent(true);
+                        view.setPressed(true);
+                        moveMobileSeek(event);
+                        return true;
+                    } else if (action == MotionEvent.ACTION_MOVE) {
+                        if (!mInSeek) return false;
+                        moveMobileSeek(event);
+                        return true;
+                    } else if (action == MotionEvent.ACTION_UP) {
+                        if (!mInSeek) return false;
+                        moveMobileSeek(event);
+                        stopSeek(false);
+                        view.setPressed(false);
+                        return true;
+                    } else if (action == MotionEvent.ACTION_CANCEL) {
+                        if (mInSeek) stopSeek(true);
+                        view.setPressed(false);
+                        return true;
+                    }
+                    return false;
+                });
+            }
             mControlsDock = (ViewGroup) rootView.findViewById(R.id.controls_dock);
             mSecondaryControlsDock =
                     (ViewGroup) rootView.findViewById(R.id.secondary_controls_dock);
@@ -562,6 +595,14 @@ public class PlaybackTransportRowPresenter extends PlaybackRowPresenter {
             mThumbsBar = (ThumbsBar) rootView.findViewById(R.id.thumbs_row);
             mThumbsBarTitle = (TextView) rootView.findViewById(com.liskovsoft.smartyoutubetv2.tv.R.id.thumbs_row_title);
             mThumbsBarWrapper = (ViewGroup) rootView.findViewById(com.liskovsoft.smartyoutubetv2.tv.R.id.thumbs_row_wrapper);
+        }
+
+        private void moveMobileSeek(MotionEvent event) {
+            if (mSeekClient == null || mTotalTimeInMs <= 0) return;
+            float progress = Math.max(0f, Math.min(1f,
+                    event.getX() / Math.max(1f, mProgressBar.getWidth())));
+            mProgressBar.setProgress((int) (progress * Integer.MAX_VALUE));
+            mSeekClient.onSeekPositionChanged((long) (progress * mTotalTimeInMs));
         }
 
         /**
@@ -1093,6 +1134,11 @@ public class PlaybackTransportRowPresenter extends PlaybackRowPresenter {
             vh.mImageView.setVisibility(View.VISIBLE);
         }
         vh.mImageView.setImageDrawable(row.getImageDrawable());
+        if (MobileUi.isHandheld(vh.view.getContext())) {
+            // Release the image slot and avoid TV-sized single-line headlines.
+            vh.mImageView.setVisibility(View.GONE);
+            styleMobileDescription(vh.mDescriptionDock, new int[]{0});
+        }
 
         vh.mControlsBoundData.adapter = row.getPrimaryActionsAdapter();
         vh.mControlsBoundData.presenter = vh.getPresenter(true);
@@ -1105,10 +1151,60 @@ public class PlaybackTransportRowPresenter extends PlaybackRowPresenter {
         mSecondaryControlsPresenter.onBindViewHolder(vh.mSecondaryControlsVh,
                 vh.mSecondaryBoundData);
 
+        if (MobileUi.isHandheld(vh.view.getContext())) {
+            applyResponsiveMobilePlayer(vh);
+        }
+
         vh.setTotalTime(row.getDuration());
         vh.setCurrentPosition(row.getCurrentPosition());
         vh.setBufferedPosition(row.getBufferedPosition());
         row.setOnPlaybackProgressChangedListener(vh.mListener);
+    }
+
+    private static void applyResponsiveMobilePlayer(ViewHolder vh) {
+        Context context = vh.view.getContext();
+        // Short phone landscape and narrow multi-window panes cannot display
+        // TV-length titles plus every control row at full height.
+        boolean shortWindow = context.getResources().getConfiguration().screenHeightDp < 430;
+        int primary = MobileUi.dp(context, shortWindow ? 48 : 52);
+        int secondary = MobileUi.dp(context, shortWindow ? 48 : 52);
+        int seekHeight = MobileUi.dp(context, shortWindow ? 36 : 42);
+
+        View primaryScroller = (View) vh.mControlsDock.getParent();
+        View secondaryScroller = (View) vh.mSecondaryControlsDock.getParent();
+        if (primaryScroller != null && primaryScroller.getLayoutParams().height != primary) {
+            ViewGroup.LayoutParams params = primaryScroller.getLayoutParams();
+            params.height = primary;
+            primaryScroller.setLayoutParams(params);
+        }
+        if (secondaryScroller != null && secondaryScroller.getLayoutParams().height != secondary) {
+            ViewGroup.LayoutParams params = secondaryScroller.getLayoutParams();
+            params.height = secondary;
+            secondaryScroller.setLayoutParams(params);
+        }
+        if (vh.mProgressBar.getLayoutParams().height != seekHeight) {
+            ViewGroup.LayoutParams params = vh.mProgressBar.getLayoutParams();
+            params.height = seekHeight;
+            vh.mProgressBar.setLayoutParams(params);
+        }
+        PlaybackControlsRow row = (PlaybackControlsRow) vh.getRow();
+        boolean hasDescription = row != null && row.getItem() != null;
+        vh.mDescriptionDock.setVisibility(!shortWindow && hasDescription ? View.VISIBLE : View.GONE);
+        vh.mAdditionalInfo.setVisibility(shortWindow ? View.GONE : View.VISIBLE);
+    }
+
+    private static void styleMobileDescription(View root, int[] textIndex) {
+        if (root instanceof TextView) {
+            TextView label = (TextView) root;
+            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, textIndex[0]++ == 0 ? 16f : 11f);
+            label.setMaxLines(1);
+            label.setEllipsize(TextUtils.TruncateAt.END);
+        } else if (root instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) root;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                styleMobileDescription(group.getChildAt(i), textIndex);
+            }
+        }
     }
 
     @Override
