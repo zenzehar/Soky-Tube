@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - 'feature/mobile-touch-android-*'
-  pull_request:
-    branches:
-      - master
   workflow_dispatch:
 
 permissions:
@@ -55,8 +52,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-20261104 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile - Touch Preview (4 Nov 2026)" \
-            --notes "Touchscreen phone/tablet preview. Includes separate mobile app ID com.sokytube.mobile. Debug signed; Android device testing is still required. Do not install over an existing SmartTube app." \
+          gh release create mobile-preview-v2-20261104 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v2 - Native Touch Controls (4 Nov 2026)" \
+            --notes "Touchscreen phone/tablet preview v2: compact hamburger navigation, direct suggestion searches, viewport-sized tiles, native player controls and finger seeking. App ID com.sokytube.mobile. Debug signed; physical device testing required." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-20261104 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v2-20261104 dist/*.apk dist/SHA256SUMS.txt --clobber
