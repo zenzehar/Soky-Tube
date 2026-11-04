@@ -161,13 +161,13 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
         mPlaybackPresenter.onViewInitialized();
         if (MobileUi.isHandheld(getContext()) && getView() != null) {
-            // The previous mobile preview hid this native controls dock.
-            // Keep the ORIGINAL controls row alive and visible on first tap.
             getView().post(() -> {
                 if (!isAdded() || getView() == null) return;
-                View nativeRow = getView().findViewById(R.id.playback_controls_dock);
-                if (nativeRow != null) nativeRow.setVisibility(View.VISIBLE);
-                showOverlay(true);
+                // One phone control surface only. Hide the TV Leanback dock
+                // entirely, while keeping its playback action adapter alive.
+                View tvDock = getView().findViewById(R.id.playback_controls_dock);
+                if (tvDock != null) tvDock.setVisibility(View.GONE);
+                super.hideControlsOverlay(false);
             });
         }
 
@@ -270,13 +270,9 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     public void onDispatchTouchEvent(MotionEvent event) {
-        if (MobileUi.isHandheld(getContext()) &&
-                event.getActionMasked() == MotionEvent.ACTION_DOWN &&
-                !isOverlayShown()) {
-            // A finger tap must reveal the one native SmartTube control row.
-            // No competing elementary overlay is created.
-            showOverlay(true);
-        }
+        // The sole mobile touch surface now owns taps, precise seek drags and
+        // double-tap skip. Do not issue a second TV overlay/tickle event.
+        if (MobileUi.isHandheld(getContext())) return;
         if (mDoubleTapPlayerAdapter != null && !isOverlayShown()) {
             boolean handled = mDoubleTapPlayerAdapter.onTouchEvent(event);
 
@@ -1332,15 +1328,19 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
      */
     @Override
     public void showOverlay(boolean show) {
-        if (forbidShowOverlay(show)) {
+        if (forbidShowOverlay(show)) return;
+        if (MobileUi.isHandheld(getContext())) {
+            if (getActivity() instanceof PlaybackActivity) {
+                ((PlaybackActivity) getActivity()).onMobileControlsRequested(show);
+            }
+            if (getView() != null) {
+                View tvDock = getView().findViewById(R.id.playback_controls_dock);
+                if (tvDock != null) tvDock.setVisibility(View.GONE);
+            }
             return;
         }
-
-        if (show) {
-            showControlsOverlay(true);
-        } else {
-            hideControlsOverlay(true);
-        }
+        if (show) showControlsOverlay(true);
+        else hideControlsOverlay(true);
     }
 
     @Override
