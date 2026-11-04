@@ -5,6 +5,16 @@
          Remove those TV-only gutters; mobile has its own hamburger toolbar. -->
     <dimen name="lb_browse_rows_margin_start">12dp</dimen>
     <dimen name="lb_browse_rows_margin_top">10dp</dimen>
+    <!-- Original native transport controls use 90dp TV buttons and 48dp gaps.
+         Preserve the buttons and their actions, but size them for finger use. -->
+    <dimen name="lb_control_button_diameter">56dp</dimen>
+    <dimen name="lb_control_button_height">52dp</dimen>
+    <dimen name="lb_control_button_secondary_diameter">48dp</dimen>
+    <dimen name="lb_control_button_secondary_height">48dp</dimen>
+    <dimen name="lb_control_icon_width">26dp</dimen>
+    <dimen name="lb_control_icon_height">26dp</dimen>
+    <dimen name="lb_control_button_text_size">15sp</dimen>
+    <dimen name="lb_playback_controls_child_margin_default">14dp</dimen>
     <dimen name="card_width">150dp</dimen>
     <dimen name="card_height">84dp</dimen>
     <dimen name="shorts_card_width">114dp</dimen>
