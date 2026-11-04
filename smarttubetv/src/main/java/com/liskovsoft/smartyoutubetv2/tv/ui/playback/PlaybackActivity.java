@@ -90,6 +90,10 @@ public class PlaybackActivity extends LeanbackActivity {
             java.util.List<com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.SeekBarSegment> segments) {
         if (mMobileWatch != null) mMobileWatch.setSponsorSegments(segments);
     }
+    void onMobileChaptersChanged(
+            java.util.List<com.liskovsoft.smartyoutubetv2.common.app.models.data.Video> chapters) {
+        if (mMobileWatch != null) mMobileWatch.setChapters(chapters);
+    }
 
     public void startMobileBackgroundAudio() {
         if (!MobileUi.isHandheld(this) || mPlaybackFragment == null) return;
