@@ -6,6 +6,9 @@ import android.view.LayoutInflater;
 import android.view.ViewGroup;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import android.view.View;
+import android.widget.FrameLayout;
+import android.view.WindowManager;
+import android.graphics.Color;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.speech.SpeechRecognizer;
 import android.text.TextUtils;
@@ -50,6 +53,8 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
     private SearchData mSearchData;
     private boolean mIsFragmentCreated;
     private CrashRestorer mCrashRestorer;
+    private MobileSearchPanel mMobilePanel;
+    private MediaServiceSearchTagProvider mMobileTagsProvider;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -76,13 +81,38 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
-        View root = super.onCreateView(inflater, container, savedInstanceState);
-        if (MobileUi.isHandheld(getContext()) && root != null) {
-            root.post(() -> updateMobileSearchSize(root));
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle state) {
+        View tvContent = super.onCreateView(inflater, container, state);
+        if (!MobileUi.isHandheld(getContext()) || tvContent == null) return tvContent;
+        if (getActivity() != null) {
+            getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN |
+                    WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+            getActivity().getWindow().setStatusBarColor(Color.WHITE);
+            getActivity().getWindow().setNavigationBarColor(Color.WHITE);
+            getActivity().getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         }
-        return root;
+        FrameLayout frame = new FrameLayout(requireContext());
+        frame.addView(tvContent, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        tvContent.setVisibility(View.INVISIBLE);
+        mMobilePanel = new MobileSearchPanel(requireContext(), new MobileSearchPanel.Actions() {
+            @Override public void submit(String query) { loadSearchResult(query); }
+            @Override public void openVideo(Video video) { mSearchPresenter.onVideoItemClicked(video); }
+            @Override public void goBack() {
+                if (getActivity() != null) getActivity().onBackPressed();
+            }
+        });
+        if (mMobileTagsProvider != null) mMobilePanel.setProvider(mMobileTagsProvider);
+        frame.addView(mMobilePanel.view(), new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        return frame;
+    }
+
+    @Override public void onDestroyView() {
+        if (mMobilePanel != null) mMobilePanel.dispose();
+        mMobilePanel = null;
+        super.onDestroyView();
     }
 
     @Override
@@ -136,6 +166,9 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
         super.onActivityCreated(savedInstanceState);
 
         mSearchPresenter.onViewInitialized();
+        if (mMobilePanel != null) mMobilePanel.view().post(() -> {
+            if (isAdded() && mMobilePanel != null) mMobilePanel.focusAndShowKeyboard();
+        });
 
         // Restore state after crash
         mCrashRestorer.restorePlayback();
@@ -160,6 +193,7 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
 
     @Override
     public void updateSearch(VideoGroup group) {
+        if (mMobilePanel != null) mMobilePanel.showResults(getResultsAdapter());
         if (isComputingLayout(group)) {
             return;
         }
@@ -173,6 +207,7 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
 
     @Override
     public void clearSearch() {
+        if (mMobilePanel != null) mMobilePanel.showResults(getResultsAdapter());
         mSearchQuery = null;
 
         for (VideoGroupObjectAdapter adapter : mSearchGroupAdapters.values()) {
@@ -214,7 +249,9 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
 
     @Override
     public void setTagsProvider(MediaServiceSearchTagProvider provider) {
+        mMobileTagsProvider = provider;
         setSearchTagsProvider(provider);
+        if (mMobilePanel != null) mMobilePanel.setProvider(provider);
     }
 
     @Override
