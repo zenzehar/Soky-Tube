@@ -134,6 +134,16 @@ final class MobileWatchPage {
         description.addView(feed.getView(), new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
+        // Recalculate 16:9 height and native controls on every genuine
+        // window-width change (foldables, freeform/split-screen, rotation).
+        screen.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, orr, ob) -> {
+            if ((r - l) != (orr - ol)) {
+                screen.post(() -> {
+                    applyLayout();
+                    player.onMobileWindowResized();
+                });
+            }
+        });
         videoFrame.post(this::applyLayout);
         onVideoChanged(player.getVideo());
     }
