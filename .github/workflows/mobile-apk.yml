@@ -63,8 +63,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-comments-sponsor-20261105 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.1 - Comments and SponsorBlock Markers (5 Nov 2026)" \
-            --notes "Mobile v7.1: functional YouTube-like comments/replies with touch sheets, working SponsorBlock category markers painted on the native player progress track, including late duration updates and chapters; adds PiP/background/notification and driver-safe media controls from v7. Preview, device testing required." \
+          gh release create mobile-preview-v7-2-crash-recovery-20261105 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.2 - Playback Crash Recovery Diagnostic (5 Nov 2026)" \
+            --notes "Diagnostic v7.2 built on v7.1: defer foreground media-service startup until explicit background/PiP; fix media-session ownership when Android stops the service; store fatal Java stack traces locally and show copyable last-crash dialog after relaunch; disable automatic app-data restoration only for the stmobile flavor. Hardware playback verification required. Foreground notification launch is intentionally deferred during isolation; do not merge to master." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-comments-sponsor-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-2-crash-recovery-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber

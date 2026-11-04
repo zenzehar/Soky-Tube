@@ -64,12 +64,12 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
 
     static synchronized void detachMediaSession(MediaSessionCompat original) {
         if (original == null || sharedSession != original) return;
+        // The playback fragment owns the session. Stop any notification
+        // service first, then release this exact session only on detach.
         if (activeService != null) activeService.stopForegroundAndSelf();
-        else {
-            sharedSession.setActive(false);
-            sharedSession.release();
-            sharedSession = null;
-        }
+        sharedSession.setActive(false);
+        sharedSession.release();
+        sharedSession = null;
     }
 
     public static void start(Context context) {
@@ -138,8 +138,14 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (!foreground) {
-            startForeground(NOTIFICATION_ID, notification());
-            foreground = true;
+            try {
+                startForeground(NOTIFICATION_ID, notification());
+                foreground = true;
+            } catch (RuntimeException failure) {
+                android.util.Log.e("MobileMedia", "Foreground playback unavailable", failure);
+                stopSelf();
+                return START_NOT_STICKY;
+            }
         }
         if (intent != null && sharedSession != null) {
             MediaControllerCompat.TransportControls controls =
@@ -195,10 +201,14 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     }
 
     private void refreshNotification() {
-        if (!foreground) return;
+        if (!foreground || sharedSession == null) return;
         NotificationManager manager = (NotificationManager)
                 getSystemService(Context.NOTIFICATION_SERVICE);
-        if (manager != null) manager.notify(NOTIFICATION_ID, notification());
+        try {
+            if (manager != null) manager.notify(NOTIFICATION_ID, notification());
+        } catch (RuntimeException failure) {
+            android.util.Log.w("MobileMedia", "Media notification unavailable", failure);
+        }
     }
 
     private void stopForegroundAndSelf() {
@@ -210,13 +220,9 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     @Override public void onDestroy() {
         foreground = false;
         activeService = null;
-        synchronized (MobilePlaybackService.class) {
-            if (sharedSession != null) {
-                sharedSession.setActive(false);
-                sharedSession.release();
-                sharedSession = null;
-            }
-        }
+        // Do not release the media session here: Android may stop a service
+        // while the fragment's player is still alive. Session ownership and
+        // cleanup belong to detachMediaSession().
         super.onDestroy();
     }
 }

@@ -49,6 +49,7 @@ public class PlaybackActivity extends LeanbackActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         boolean mobile = MobileUi.isHandheld(this);
+        if (mobile) com.liskovsoft.smartyoutubetv2.tv.ui.main.MainApplication.setMobilePlaybackPhase("creating playback screen");
         setContentView(mobile ? R.layout.fragment_playback_mobile : R.layout.fragment_playback);
         Fragment fragment =
                 getSupportFragmentManager().findFragmentByTag(getString(R.string.playback_tag));
@@ -56,6 +57,7 @@ public class PlaybackActivity extends LeanbackActivity {
             mPlaybackFragment = (PlaybackFragment) fragment;
         }
         if (mobile && mPlaybackFragment != null) mMobileWatch = new MobileWatchPage(this, mPlaybackFragment);
+        if (mobile) com.liskovsoft.smartyoutubetv2.tv.ui.main.MainApplication.setMobilePlaybackPhase("playback screen attached");
     }
 
     @Override
@@ -75,8 +77,12 @@ public class PlaybackActivity extends LeanbackActivity {
     void onMobileVideoChanged(com.liskovsoft.smartyoutubetv2.common.app.models.data.Video video) {
         if (mMobileWatch != null) mMobileWatch.onVideoChanged(video);
         if (MobileUi.isHandheld(this) && video != null && mPlaybackFragment != null) {
-            MobilePlaybackService.start(this);
-            MobilePlaybackService.refresh();
+            com.liskovsoft.smartyoutubetv2.tv.ui.main.MainApplication
+                    .setMobilePlaybackPhase("video selected / awaiting decoder");
+            // v7.2 crash isolation: do NOT start a foreground service from
+            // video metadata delivery. The media player may not be ready yet.
+            // PiP and explicit Background audio still start the service.
+            // Keep the foreground player and native TV code untouched.
             updateMobilePipParams();
         }
     }

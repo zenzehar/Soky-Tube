@@ -22,6 +22,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.LeanbackActivity;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
+import com.liskovsoft.smartyoutubetv2.tv.ui.main.MainApplication;
 
 /** YouTube-like touch chrome; Android TV still uses the unchanged Leanback UI. */
 public class BrowseActivity extends LeanbackActivity {
@@ -48,6 +49,27 @@ public class BrowseActivity extends LeanbackActivity {
         } catch (NoClassDefFoundError e) {
             MessageHelpers.showMessage(this, e.getMessage());
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (!MobileUi.isHandheld(this)) return;
+        // Visible after a crash/relaunch without requiring adb or special access.
+        String report = MainApplication.consumeMobileCrashReport(this);
+        if (report == null) return;
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Soky Tube: last crash report")
+                .setMessage(report)
+                .setPositiveButton("Copy report", (dialog, which) -> {
+                    android.content.ClipboardManager clipboard =
+                            (android.content.ClipboardManager)
+                                    getSystemService(CLIPBOARD_SERVICE);
+                    if (clipboard != null) clipboard.setPrimaryClip(
+                            android.content.ClipData.newPlainText("Soky Tube crash", report));
+                })
+                .setNegativeButton("Close", null)
+                .show();
     }
 
     private int dp(float d) { return MobileUi.dp(this, d); }
