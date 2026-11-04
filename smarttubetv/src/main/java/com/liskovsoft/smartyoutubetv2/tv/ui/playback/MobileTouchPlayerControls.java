@@ -163,7 +163,9 @@ final class MobileTouchPlayerControls {
         addButton(top, R.drawable.mobile_ic_back, "Back", activity::onBackPressed);
         View filler = new View(activity);
         top.addView(filler, new LinearLayout.LayoutParams(0, 1, 1f));
-        addButton(top, R.drawable.mobile_ic_more, "Playback options", this::showOptions);
+        addButton(top, R.drawable.mobile_ic_pip, "Picture-in-picture",
+                () -> activity.enterMobilePip(false));
+        addButton(top, R.drawable.mobile_ic_settings, "Settings", this::showOptions);
 
         center = new LinearLayout(activity);
         center.setGravity(Gravity.CENTER);
