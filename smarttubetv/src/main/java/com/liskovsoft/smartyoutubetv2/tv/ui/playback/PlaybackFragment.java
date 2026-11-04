@@ -292,6 +292,13 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         mPlaybackPresenter.onFinish();
     }
 
+    /** Refresh only the existing controls after a phone rotation or window resize. */
+    public void onMobileWindowResized() {
+        if (getView() != null && mPlayerGlue != null) {
+            notifyPlaybackRowChanged();
+        }
+    }
+
     public void onPIPChanged(boolean isInPIP) {
         if (!isInPIP) {
             // Fix partially disappeared buttons after exit from PIP???
