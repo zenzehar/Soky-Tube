@@ -200,7 +200,7 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
             return;
         }
 
-        setHeadersState(MobileUi.isHandheld(getContext()) ? HEADERS_DISABLED : HEADERS_ENABLED);
+        setHeadersState(MobileUi.isHandheld(getContext()) ? HEADERS_HIDDEN : HEADERS_ENABLED);
         setHeadersTransitionOnBackEnabled(!MobileUi.isHandheld(getContext()));
 
         int brandColorRes = Helpers.getThemeAttr(getContext(), R.attr.brandColor);
