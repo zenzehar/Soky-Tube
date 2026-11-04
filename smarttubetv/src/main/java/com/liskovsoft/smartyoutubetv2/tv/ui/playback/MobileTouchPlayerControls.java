@@ -107,7 +107,9 @@ final class MobileTouchPlayerControls {
 
         GestureDetector gestures = new GestureDetector(activity, new GestureDetector.SimpleOnGestureListener() {
             @Override public boolean onDown(MotionEvent event) { return true; }
-            @Override public boolean onSingleTapConfirmed(MotionEvent event) {
+            @Override public boolean onSingleTapUp(MotionEvent event) {
+                // React on finger-up immediately instead of waiting for the
+                // double-tap timeout (which made phone controls feel sluggish).
                 setVisible(!visible);
                 return true;
             }
