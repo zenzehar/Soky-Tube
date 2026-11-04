@@ -1,6 +1,15 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.search.tags;
 
 import android.os.Bundle;
+import android.content.res.Configuration;
+import android.view.LayoutInflater;
+import android.view.ViewGroup;
+import com.liskovsoft.smartyoutubetv2.tv.R;
+import android.view.View;
+import android.widget.FrameLayout;
+import android.view.WindowManager;
+import android.graphics.Color;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.speech.SpeechRecognizer;
 import android.text.TextUtils;
 
@@ -44,6 +53,9 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
     private SearchData mSearchData;
     private boolean mIsFragmentCreated;
     private CrashRestorer mCrashRestorer;
+    private MobileSearchPanel mMobilePanel;
+    private MediaServiceSearchTagProvider mMobileTagsProvider;
+    private String mMobileSearchPageKey;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -63,9 +75,77 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
         mSearchData = SearchData.instance(getContext());
 
         setupEventListeners();
-        setKeyboardAutoShowEnabled(mSearchData.isKeyboardAutoShowEnabled());
+        // Phones should open the platform IME without requiring a D-pad action.
+        setKeyboardAutoShowEnabled(MobileUi.isHandheld(getContext()) || mSearchData.isKeyboardAutoShowEnabled());
         setKeyboardFixEnabled(mSearchData.isKeyboardFixEnabled());
         setTypingCorrectionDisabled(mSearchData.isTypingCorrectionDisabled());
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle state) {
+        View tvContent = super.onCreateView(inflater, container, state);
+        if (!MobileUi.isHandheld(getContext()) || tvContent == null) return tvContent;
+        if (getActivity() != null) {
+            getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN |
+                    WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+            getActivity().getWindow().setStatusBarColor(Color.WHITE);
+            getActivity().getWindow().setNavigationBarColor(Color.WHITE);
+            getActivity().getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        }
+        FrameLayout frame = new FrameLayout(requireContext());
+        frame.addView(tvContent, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        tvContent.setVisibility(View.INVISIBLE);
+        mMobilePanel = new MobileSearchPanel(requireContext(), new MobileSearchPanel.Actions() {
+            @Override public void submit(String query) { loadSearchResult(query); }
+            @Override public void openVideo(Video video) { mSearchPresenter.onVideoItemClicked(video); }
+            @Override public void visible(Video video) { checkScrollEnd(video); }
+            @Override public void goBack() {
+                if (getActivity() != null) getActivity().onBackPressed();
+            }
+        });
+        if (mMobileTagsProvider != null) mMobilePanel.setProvider(mMobileTagsProvider);
+        frame.addView(mMobilePanel.view(), new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        return frame;
+    }
+
+    @Override public void onDestroyView() {
+        if (mMobilePanel != null) mMobilePanel.dispose();
+        mMobilePanel = null;
+        super.onDestroyView();
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (MobileUi.isHandheld(getContext()) && getView() != null) {
+            getView().post(() -> updateMobileSearchSize(getView()));
+        }
+    }
+
+    private void updateMobileSearchSize(View root) {
+        if (root == null || !isAdded()) return;
+        View items = root.findViewById(R.id.lb_search_bar_items);
+        if (items == null) return;
+        float dpWidth = root.getWidth() > 0
+                ? root.getWidth() / Math.max(0.1f, getResources().getDisplayMetrics().density)
+                : MobileUi.windowWidthDp(getContext());
+
+        // Voice orb and two 12dp gutters remain outside the entry field.
+        // Clamp to the CURRENT viewport so the edit text never extends offscreen.
+        float fieldWidthDp = Math.min(600f, Math.max(1f, dpWidth - 88f));
+        ViewGroup.LayoutParams params = items.getLayoutParams();
+        int target = MobileUi.dp(getContext(), fieldWidthDp);
+        if (params != null && params.width != target) {
+            params.width = target;
+            items.setLayoutParams(params);
+        }
+        View settings = root.findViewById(R.id.search_settings_orb);
+        if (settings != null) {
+            settings.setVisibility(dpWidth < 340f ? View.GONE : View.VISIBLE);
+        }
     }
 
     private void setupEventListeners() {
@@ -88,6 +168,9 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
         super.onActivityCreated(savedInstanceState);
 
         mSearchPresenter.onViewInitialized();
+        if (mMobilePanel != null) mMobilePanel.view().post(() -> {
+            if (isAdded() && mMobilePanel != null) mMobilePanel.focusAndShowKeyboard();
+        });
 
         // Restore state after crash
         mCrashRestorer.restorePlayback();
@@ -112,6 +195,7 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
 
     @Override
     public void updateSearch(VideoGroup group) {
+        if (mMobilePanel != null) mMobilePanel.showResults(getResultsAdapter());
         if (isComputingLayout(group)) {
             return;
         }
@@ -125,6 +209,7 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
 
     @Override
     public void clearSearch() {
+        if (mMobilePanel != null) mMobilePanel.showResults(getResultsAdapter());
         mSearchQuery = null;
 
         for (VideoGroupObjectAdapter adapter : mSearchGroupAdapters.values()) {
@@ -166,7 +251,9 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
 
     @Override
     public void setTagsProvider(MediaServiceSearchTagProvider provider) {
+        mMobileTagsProvider = provider;
         setSearchTagsProvider(provider);
+        if (mMobilePanel != null) mMobilePanel.setProvider(provider);
     }
 
     @Override
@@ -239,7 +326,25 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
         if (item instanceof Video) {
             mSearchPresenter.onVideoItemClicked((Video) item);
         } else if (item instanceof Tag) {
-            startSearch(((Tag) item).tag, false);
+            String suggestion = ((Tag) item).tag;
+            // The TV flow only copies a suggestion into the search field.
+            // On touch phones, selecting a suggestion is itself the search action.
+            startSearch(suggestion, false);
+            if (MobileUi.isHandheld(getContext())) {
+                View view = getView();
+                if (view != null) {
+                    view.post(() -> {
+                        if (!isAdded()) return;
+                        onQueryTextSubmit(suggestion);
+                        android.view.inputmethod.InputMethodManager keyboard =
+                                (android.view.inputmethod.InputMethodManager)
+                                requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                        if (keyboard != null) keyboard.hideSoftInputFromWindow(view.getWindowToken(), 0);
+                    });
+                } else {
+                    onQueryTextSubmit(suggestion);
+                }
+            }
         }
     }
 
@@ -276,7 +381,12 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
         int index = resultsAdapter.indexOf(item);
 
         if (index > (size - ViewUtil.ROW_SCROLL_CONTINUE_NUM)) {
-            mSearchPresenter.onScrollEnd((Video) resultsAdapter.get(size - 1));
+            Video last = (Video) resultsAdapter.get(size - 1);
+            String key = last.videoId != null ? last.videoId : last.toString();
+            if (!MobileUi.isHandheld(getContext()) || !key.equals(mMobileSearchPageKey)) {
+                mMobileSearchPageKey = key;
+                mSearchPresenter.onScrollEnd(last);
+            }
         }
     }
 
@@ -361,6 +471,7 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
     }
 
     private void loadSearchResult(String searchQuery) {
+        if (mMobilePanel != null && !TextUtils.equals(searchQuery, mSearchQuery)) mMobileSearchPageKey = null;
         // Don't show suggested videos (empty query).
         // They are inaccurate and usually have problems with layout.
         if (!TextUtils.isEmpty(searchQuery) && !searchQuery.equals(mSearchQuery)) {

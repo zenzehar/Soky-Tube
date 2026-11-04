@@ -24,6 +24,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.views.AppDialogView;
 import com.liskovsoft.smartyoutubetv2.common.misc.MotherActivity;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
 import com.liskovsoft.smartyoutubetv2.tv.R;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import com.liskovsoft.smartyoutubetv2.tv.ui.dialogs.other.ChatPreference;
 import com.liskovsoft.smartyoutubetv2.tv.ui.dialogs.other.ChatPreferenceDialogFragment;
 import com.liskovsoft.smartyoutubetv2.tv.ui.dialogs.other.CommentsPreference;
@@ -133,6 +134,11 @@ public class AppDialogFragment extends LeanbackSettingsFragment implements AppDi
         mIsTransparent = stackIsEmpty ? isTransparent : mIsTransparent;
         mIsOverlay = isOverlay;
         mId = id;
+        if (getActivity() instanceof AppDialogActivity) {
+            AppDialogActivity mobileActivity = (AppDialogActivity) getActivity();
+            mobileActivity.setMobilePanelTitle(title);
+            if (getView() != null) getView().post(mobileActivity::requestMobileSettingsLayout);
+        }
 
         if (isExpandable && categories != null && categories.size() == 1) {
             OptionCategory category = categories.get(0);
@@ -236,6 +242,10 @@ public class AppDialogFragment extends LeanbackSettingsFragment implements AppDi
         }
         // Fix possible state loss!!!
         transaction.commitAllowingStateLoss();
+        if (getActivity() instanceof AppDialogActivity && getView() != null) {
+            getView().post(() ->
+                    ((AppDialogActivity) getActivity()).requestMobileSettingsLayout());
+        }
     }
 
     @Override
@@ -317,6 +327,16 @@ public class AppDialogFragment extends LeanbackSettingsFragment implements AppDi
         @Override
         public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
             View view = super.onCreateView(inflater, container, savedInstanceState);
+
+            if (view != null && MobileUi.isHandheld(getActivity())) {
+                // The phone Settings activity owns the fixed Back/Title/Close
+                // toolbar; avoid a duplicate TV title taking vertical space.
+                View tvTitle = view.findViewById(R.id.decor_title_container);
+                if (tvTitle != null) tvTitle.setVisibility(View.GONE);
+                if (getActivity() instanceof AppDialogActivity) {
+                    view.post(() -> ((AppDialogActivity) getActivity()).requestMobileSettingsLayout());
+                }
+            }
 
             if (mIsTransparent && view != null) {
                 // Enable transparent shadow outline on parent (R.id.settings_preference_fragment_container)
