@@ -29,8 +29,11 @@ jobs:
           cache: gradle
       - name: Install project Android SDK and NDK
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;21.0.6113669"
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDK_MANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -1)"
+          test -n "$SDK_MANAGER"
+          yes | "$SDK_MANAGER" --licenses > /dev/null || true
+          "$SDK_MANAGER" "platforms;android-34" "build-tools;34.0.0" "ndk;21.0.6113669"
       - name: Build installable debug-signed mobile APK
         run: |
           chmod +x gradlew
