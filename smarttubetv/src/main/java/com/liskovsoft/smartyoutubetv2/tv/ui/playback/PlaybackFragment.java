@@ -312,6 +312,20 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         mPlaybackPresenter.onButtonClicked(actionId, state);
     }
 
+    private final java.util.Set<String> mMobilePagedRecommendations = new java.util.HashSet<>();
+
+    public void onMobileSuggestionVisible(Video video) {
+        if (video == null || mVideoGroupAdapters == null || mPlaybackPresenter == null) return;
+        for (VideoGroupObjectAdapter group : mVideoGroupAdapters.values()) {
+            int index = group.indexOf(video);
+            if (index < 0 || index < group.size() - ViewUtil.ROW_SCROLL_CONTINUE_NUM) continue;
+            Video last = (Video) group.get(group.size() - 1);
+            String key = last.videoId != null ? last.videoId : last.toString();
+            if (mMobilePagedRecommendations.add(key)) mPlaybackPresenter.onScrollEnd(last);
+            break;
+        }
+    }
+
     public void openMobileSuggestion(Video video) {
         if (video != null && mPlaybackPresenter != null) {
             mPlaybackPresenter.onSuggestionItemClicked(video);
