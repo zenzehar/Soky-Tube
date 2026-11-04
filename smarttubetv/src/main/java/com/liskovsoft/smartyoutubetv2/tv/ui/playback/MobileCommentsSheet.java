@@ -155,8 +155,8 @@ final class MobileCommentsSheet {
         int width = contentWidth / density >= 600f
                 ? Math.min(contentWidth - dp(32),dp(640))
                 : ViewGroup.LayoutParams.MATCH_PARENT;
-        int height = Math.max(dp(180),Math.min(contentHeight,
-                Math.round(contentHeight * .82f)));
+        int height = Math.max(1,Math.min(contentHeight,
+                Math.max(dp(140),Math.round(contentHeight * .82f))));
         dialog.getWindow().setLayout(width,height);
     }
 
