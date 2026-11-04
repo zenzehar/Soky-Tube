@@ -407,12 +407,43 @@ final class MobileTouchPlayerControls {
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(dp(16),dp(10),dp(16),dp(14));
         layout.setBackgroundColor(0xFF202124);
+        LinearLayout sheetHeader = new LinearLayout(activity);
+        sheetHeader.setGravity(Gravity.CENTER_VERTICAL);
+        layout.addView(sheetHeader,new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,dp(52)));
+        if (!"Settings".equals(title)) {
+            TextView back = new TextView(activity);
+            back.setText("‹");
+            back.setTextSize(32);
+            back.setTextColor(Color.WHITE);
+            back.setGravity(Gravity.CENTER);
+            back.setContentDescription("Back to Settings");
+            sheetHeader.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));
+            back.setOnClickListener(v -> {
+                sheet.dismiss();
+                if (title.startsWith("Advanced")) showQuality();
+                else showOptions();
+            });
+        }
         TextView heading = new TextView(activity);
         heading.setText(title);
         heading.setTextColor(Color.WHITE);
         heading.setTextSize(19);
-        heading.setPadding(dp(8),dp(10),dp(8),dp(14));
-        layout.addView(heading);
+        heading.setSingleLine(true);
+        heading.setEllipsize(TextUtils.TruncateAt.END);
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams headingParams = new LinearLayout.LayoutParams(
+                0,ViewGroup.LayoutParams.MATCH_PARENT,1f);
+        headingParams.setMarginStart(dp(6));
+        sheetHeader.addView(heading,headingParams);
+        TextView close = new TextView(activity);
+        close.setText("×");
+        close.setTextSize(28);
+        close.setGravity(Gravity.CENTER);
+        close.setTextColor(Color.WHITE);
+        close.setContentDescription("Close player Settings");
+        sheetHeader.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48)));
+        close.setOnClickListener(v -> sheet.dismiss());
         if (subtitle != null) {
             TextView detail = new TextView(activity);
             detail.setText(subtitle);
@@ -449,9 +480,13 @@ final class MobileTouchPlayerControls {
             sheet.getWindow().setGravity(Gravity.BOTTOM);
             sheet.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT);
-            int max = Math.round(activity.getResources().getDisplayMetrics().heightPixels * .76f);
+            float availableHeightDp = activity.getResources().getConfiguration().screenHeightDp;
+            int max = Math.max(dp(96),Math.round(availableHeightDp *
+                    activity.getResources().getDisplayMetrics().density * .72f)
+                    - dp(subtitle == null ? 60 : 92));
             scroller.setLayoutParams(new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, Math.min(dp(labels.length*54), max)));
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    Math.max(dp(52),Math.min(dp(labels.length*54),max))));
         }
         sheet.show();
         if (sheet.getWindow() != null) {
