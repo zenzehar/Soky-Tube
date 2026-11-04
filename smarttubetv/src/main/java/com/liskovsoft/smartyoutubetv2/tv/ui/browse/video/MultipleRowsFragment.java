@@ -60,6 +60,7 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
     private int mSelectedRowIndex = -1;
     private ChannelHeaderCallback mChannelHeaderCallback;
     private MobileVideoFeed mMobileFeed;
+    private final java.util.Set<String> mMobilePagedVideos = new java.util.HashSet<>();
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -104,6 +105,17 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
             if (mMainPresenter != null) mMainPresenter.onVideoItemClicked(video);
         }, true);
         mMobileFeed.setBottomInsetDp(16);
+        mMobileFeed.setOnVideoVisible(video -> {
+            if (video == null || mVideoGroupAdapters == null || mMainPresenter == null) return;
+            for (VideoGroupObjectAdapter group : mVideoGroupAdapters.values()) {
+                int index = group.indexOf(video);
+                if (index < 0 || index < group.size() - ViewUtil.ROW_SCROLL_CONTINUE_NUM) continue;
+                Video last = (Video) group.get(group.size() - 1);
+                String pageKey = last.videoId != null ? last.videoId : last.toString();
+                if (mMobilePagedVideos.add(pageKey)) mMainPresenter.onScrollEnd(last);
+                break;
+            }
+        });
         frame.addView(mMobileFeed.getView(), new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         mMobileFeed.scheduleRows(mRowsAdapter);
