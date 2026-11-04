@@ -100,7 +100,7 @@ final class MobileSettingsPanel extends RecyclerView {
             TextView title = new TextView(getContext());
             title.setTextColor(0xFF171717);
             title.setTextSize(15);
-            title.setTypeface(Typeface.DEFAULT, Typeface.MEDIUM);
+            title.setTypeface(Typeface.DEFAULT, Typeface.NORMAL);
             title.setMaxLines(2);
             title.setEllipsize(TextUtils.TruncateAt.END);
             LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
