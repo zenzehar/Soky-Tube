@@ -167,10 +167,8 @@ public final class MobileSignInFragment extends Fragment implements SignInView {
     private void resizeQr(int width, int height) {
         if (qr == null || width <= 0 || height <= 0) return;
         float density = Math.max(0.1f, getResources().getDisplayMetrics().density);
-        // QR may use a compact 140dp size when the window is short, but remains
-        // square and at least 100dp where physically possible.
-        int size = Math.round(Math.min(dp(272), Math.min(width - dp(56),
-                Math.max(dp(104), height * 0.32f))));
+        int size = Math.round(MobileUi.mobileQrSizeDp(
+                width / density, height / density) * density);
         size = Math.max(1, size);
         ViewGroup.LayoutParams params = qr.getLayoutParams();
         if (params.width != size || params.height != size) {
