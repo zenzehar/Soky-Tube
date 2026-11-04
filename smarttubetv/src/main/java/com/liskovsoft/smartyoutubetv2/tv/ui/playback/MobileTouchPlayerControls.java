@@ -276,6 +276,8 @@ final class MobileTouchPlayerControls {
 
     // YouTube-style navigation hierarchy with live options from the actual
     // ExoPlayer tracks, not hard-coded '4K/1080p' choices that may not exist.
+    void openSettings() { showOptions(); }
+
     private void showOptions() {
         showSheet("Settings", null,
                 new String[]{"Quality", "Playback speed", "Captions", "Chapters",
