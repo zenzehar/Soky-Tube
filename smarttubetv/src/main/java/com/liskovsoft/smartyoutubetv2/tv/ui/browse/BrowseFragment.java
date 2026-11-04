@@ -400,6 +400,22 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
      * Fix: IllegalStateException: "Can not perform this action after onSaveInstanceState"
      */
     /** Phone/tablet sections menu reuses the same underlying sections and selection logic. */
+    public boolean selectMobileSectionByName(String name) {
+        if (mSectionRowAdapter == null || name == null) return false;
+        String target = name.toLowerCase(java.util.Locale.ROOT);
+        for (int i = 0; i < mSectionRowAdapter.size(); i++) {
+            Object value = mSectionRowAdapter.get(i);
+            if (!(value instanceof PageRow)) continue;
+            HeaderItem header = ((PageRow) value).getHeaderItem();
+            if (header != null && header.getName() != null &&
+                    header.getName().toLowerCase(java.util.Locale.ROOT).contains(target)) {
+                selectSection(i, true);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void showMobileSections(android.view.View anchor) {
         if (anchor == null || mSectionRowAdapter == null) return;
         android.widget.PopupMenu sections = new android.widget.PopupMenu(requireContext(), anchor);
