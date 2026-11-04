@@ -161,12 +161,13 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
         mPlaybackPresenter.onViewInitialized();
         if (MobileUi.isHandheld(getContext()) && getView() != null) {
-            View root = getView();
-            // Only one control layer is rendered on phones. Leanback continues
-            // providing player actions and recommendations invisibly underneath.
-            root.post(() -> {
-                View tvControls = root.findViewById(R.id.playback_controls_dock);
-                if (tvControls != null) tvControls.setVisibility(View.GONE);
+            // The previous mobile preview hid this native controls dock.
+            // Keep the ORIGINAL controls row alive and visible on first tap.
+            getView().post(() -> {
+                if (!isAdded() || getView() == null) return;
+                View nativeRow = getView().findViewById(R.id.playback_controls_dock);
+                if (nativeRow != null) nativeRow.setVisibility(View.VISIBLE);
+                showOverlay(true);
             });
         }
 
@@ -269,6 +270,13 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     public void onDispatchTouchEvent(MotionEvent event) {
+        if (MobileUi.isHandheld(getContext()) &&
+                event.getActionMasked() == MotionEvent.ACTION_DOWN &&
+                !isOverlayShown()) {
+            // A finger tap must reveal the one native SmartTube control row.
+            // No competing elementary overlay is created.
+            showOverlay(true);
+        }
         if (mDoubleTapPlayerAdapter != null && !isOverlayShown()) {
             boolean handled = mDoubleTapPlayerAdapter.onTouchEvent(event);
 
