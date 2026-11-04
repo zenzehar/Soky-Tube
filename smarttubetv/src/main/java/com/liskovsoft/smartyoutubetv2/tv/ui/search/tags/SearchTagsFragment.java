@@ -1,6 +1,10 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.search.tags;
 
 import android.os.Bundle;
+import android.content.res.Configuration;
+import android.view.LayoutInflater;
+import android.view.ViewGroup;
+import com.liskovsoft.smartyoutubetv2.tv.R;
 import android.view.View;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.speech.SpeechRecognizer;
@@ -69,6 +73,47 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
         setKeyboardAutoShowEnabled(MobileUi.isHandheld(getContext()) || mSearchData.isKeyboardAutoShowEnabled());
         setKeyboardFixEnabled(mSearchData.isKeyboardFixEnabled());
         setTypingCorrectionDisabled(mSearchData.isTypingCorrectionDisabled());
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+                             Bundle savedInstanceState) {
+        View root = super.onCreateView(inflater, container, savedInstanceState);
+        if (MobileUi.isHandheld(getContext()) && root != null) {
+            root.post(() -> updateMobileSearchSize(root));
+        }
+        return root;
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (MobileUi.isHandheld(getContext()) && getView() != null) {
+            getView().post(() -> updateMobileSearchSize(getView()));
+        }
+    }
+
+    private void updateMobileSearchSize(View root) {
+        if (root == null || !isAdded()) return;
+        View items = root.findViewById(R.id.lb_search_bar_items);
+        if (items == null) return;
+        float dpWidth = root.getWidth() > 0
+                ? root.getWidth() / Math.max(0.1f, getResources().getDisplayMetrics().density)
+                : MobileUi.windowWidthDp(getContext());
+
+        // Voice orb and two 12dp gutters remain outside the entry field.
+        // Clamp to the CURRENT viewport so the edit text never extends offscreen.
+        float fieldWidthDp = Math.min(600f, Math.max(1f, dpWidth - 88f));
+        ViewGroup.LayoutParams params = items.getLayoutParams();
+        int target = MobileUi.dp(getContext(), fieldWidthDp);
+        if (params != null && params.width != target) {
+            params.width = target;
+            items.setLayoutParams(params);
+        }
+        View settings = root.findViewById(R.id.search_settings_orb);
+        if (settings != null) {
+            settings.setVisibility(dpWidth < 340f ? View.GONE : View.VISIBLE);
+        }
     }
 
     private void setupEventListeners() {
