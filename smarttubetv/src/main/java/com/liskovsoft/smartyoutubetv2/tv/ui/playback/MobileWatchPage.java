@@ -238,6 +238,7 @@ final class MobileWatchPage {
         description.addView(nextHeader);
 
         feed = new MobileVideoFeed(activity, player::openMobileSuggestion, false);
+        feed.setOnVideoVisible(player::onMobileSuggestionVisible);
         description.addView(feed.getView(), new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         videoFrame.post(this::applyLayout);
