@@ -32,7 +32,7 @@ import java.util.Locale;
  */
 final class MobileTouchPlayerControls {
     private final PlaybackActivity activity;
-    private final PlaybackFragment player;
+    private PlaybackFragment player;
     private final FrameLayout root;
     private final LinearLayout top;
     private final LinearLayout center;
