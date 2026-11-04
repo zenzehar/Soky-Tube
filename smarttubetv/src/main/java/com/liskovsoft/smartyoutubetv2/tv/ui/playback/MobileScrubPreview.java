@@ -47,6 +47,8 @@ final class MobileScrubPreview {
     private String lastVideoId;
     private long initializedDuration;
     private int previewGeneration;
+    private Runnable pendingFrameRequest;
+    private long previousRequestMs = -1;
     private boolean released;
     private boolean expanded;
     private int frameWidth;
@@ -153,6 +155,8 @@ final class MobileScrubPreview {
         video = source;
         lastVideoId = source != null ? source.videoId : null;
         initializedDuration = -1;
+        previousRequestMs = -1;
+        if (pendingFrameRequest != null) handler.removeCallbacks(pendingFrameRequest);
         setChapters(null);
         hero.setImageDrawable(null);
         hide();
@@ -189,15 +193,24 @@ final class MobileScrubPreview {
     }
 
     private void requestBitmap(long positionMs) {
-        if (released) return;
+        if (released || Math.abs(positionMs - previousRequestMs) < 650) return;
+        previousRequestMs = positionMs;
+        if (pendingFrameRequest != null) handler.removeCallbacks(pendingFrameRequest);
         final int token = ++previewGeneration;
-        storyboards.getBitmapAtMs(positionMs,bitmap -> {
-            if (released || token != previewGeneration || activity.isFinishing()) return;
-            handler.post(() -> {
-                if (!released && token == previewGeneration && bubble.getVisibility() == View.VISIBLE)
-                    hero.setImageBitmap(bitmap);
+        pendingFrameRequest = () -> {
+            if (released || token != previewGeneration) return;
+            storyboards.getBitmapAtMs(positionMs,bitmap -> {
+                if (released || token != previewGeneration || activity.isFinishing()) return;
+                handler.post(() -> {
+                    if (!released && token == previewGeneration &&
+                            bubble.getVisibility() == View.VISIBLE)
+                        hero.setImageBitmap(bitmap);
+                });
             });
-        });
+        };
+        // Debounce scrubbing so fast finger motion does not issue dozens of
+        // Glide requests per second or freeze modest Android phones.
+        handler.postDelayed(pendingFrameRequest,85);
     }
 
     void showFilmstrip(long positionMs,SeekHandler onSeek) {
@@ -278,6 +291,8 @@ final class MobileScrubPreview {
         bubble.setVisibility(View.GONE);
         filmstripBox.setVisibility(View.GONE);
         ++previewGeneration;
+        if (pendingFrameRequest != null) handler.removeCallbacks(pendingFrameRequest);
+        previousRequestMs = -1;
     }
 
     void resize() {
