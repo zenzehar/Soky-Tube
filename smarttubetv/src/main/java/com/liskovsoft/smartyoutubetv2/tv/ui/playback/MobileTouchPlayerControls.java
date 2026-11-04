@@ -54,6 +54,7 @@ final class MobileTouchPlayerControls {
     private MobileScrubPreview scrubPreviews;
     private final ArrayList<Video> chapterVideos = new ArrayList<>();
     private long chapterMarkerDuration = -1;
+    private long sponsorMarkerSignature = Long.MIN_VALUE;
 
     private final TextView time;
     private final ImageButton play;
@@ -509,7 +510,27 @@ final class MobileTouchPlayerControls {
     }
 
     void setSponsorSegments(List<SeekBarSegment> segments) {
+        sponsorMarkerSignature = Long.MIN_VALUE;
         sponsorMarkers.updateSegments(segments);
+    }
+
+    /** Sync asynchronously loaded SponsorBlock categories after duration resolves.
+     * Prevents stale segments and avoids invalidating the seekbar every tick.
+     */
+    private void refreshSponsorMarkers(long duration) {
+        if (duration <= 0) return;
+        List<SeekBarSegment> source = player.getMobileSponsorSegmentsForDuration(duration);
+        long signature = 1125899906842597L;
+        for (SeekBarSegment segment : source) {
+            if (segment == null) continue;
+            signature = signature * 31 + Float.floatToIntBits(segment.startProgress);
+            signature = signature * 31 + Float.floatToIntBits(segment.endProgress);
+            signature = signature * 31 + segment.color;
+        }
+        if (signature != sponsorMarkerSignature) {
+            sponsorMarkerSignature = signature;
+            sponsorMarkers.updateSegments(source);
+        }
     }
     void setChapters(List<Video> chapters) {
         chapterVideos.clear();
@@ -522,6 +543,8 @@ final class MobileTouchPlayerControls {
     void onVideoChanged(Video video) {
         if (scrubPreviews != null) scrubPreviews.setVideo(video);
         chapterMarkerDuration = -1;
+        sponsorMarkerSignature = Long.MIN_VALUE;
+        sponsorMarkers.updateSegments(java.util.Collections.emptyList());
     }
 
     private String chapterTitle(long position) {
@@ -546,6 +569,7 @@ final class MobileTouchPlayerControls {
         if (tracking) return;
         long duration = Math.max(0L, player.getDurationMs());
         long position = Math.max(0L, player.getPositionMs());
+        refreshSponsorMarkers(duration);
         if (scrubPreviews != null) scrubPreviews.refresh();
         if (duration != chapterMarkerDuration) {
             chapterMarkerDuration = duration;
