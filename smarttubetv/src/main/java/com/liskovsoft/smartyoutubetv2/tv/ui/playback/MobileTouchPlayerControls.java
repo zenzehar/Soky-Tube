@@ -243,7 +243,8 @@ final class MobileTouchPlayerControls {
 
     private void resize(int widthPx, int heightPx) {
         if (heightPx <= 0) return;
-        boolean compact = heightPx < dp(190);
+        boolean compact = MobileUi.compactTouchPlayer(heightPx /
+                Math.max(0.1f, activity.getResources().getDisplayMetrics().density));
         top.setVisibility(visible && !compact ? View.VISIBLE : View.GONE);
         center.setVisibility(visible ? View.VISIBLE : View.GONE);
         bottom.setVisibility(visible ? View.VISIBLE : View.GONE);
