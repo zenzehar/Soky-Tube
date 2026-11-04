@@ -76,7 +76,7 @@ final class MobileSectionsDrawer {
         dock.setElevation(MobileUi.dp(fragment.requireContext(), 12));
         HeadersSupportFragment headers = fragment.getHeadersSupportFragment();
         if (headers != null) {
-            headers.setBackgroundColor(Color.WHITE);
+            if (headers.getView() != null) headers.getView().setBackgroundColor(Color.WHITE);
             Helpers.setField(headers, "mHeadersEnabled", true);
             View actualList = headers.getView();
             if (actualList != null) {
@@ -98,6 +98,7 @@ final class MobileSectionsDrawer {
             }
             VerticalGridView grid = headers.getVerticalGridView();
             if (grid != null) {
+                grid.setBackgroundColor(Color.WHITE);
                 grid.setChildrenVisibility(View.VISIBLE);
                 ViewGroup.LayoutParams gridLayout = grid.getLayoutParams();
                 if (gridLayout != null) {
