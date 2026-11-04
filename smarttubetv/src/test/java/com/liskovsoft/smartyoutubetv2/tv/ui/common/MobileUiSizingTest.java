@@ -75,6 +75,25 @@ public class MobileUiSizingTest {
         assertTrue(MobileUi.showPlayerMetadata(280f));
     }
 
+    @Test public void phoneShortsAndNormalVideosRespectAvailableHeight() {
+        assertEquals(202.5f, MobileUi.mobileVideoHeightDp(360, 780, false), 0.01f);
+        assertEquals(530.4f, MobileUi.mobileVideoHeightDp(360, 780, true), 0.01f);
+        assertEquals(190.4f, MobileUi.mobileVideoHeightDp(360, 280, true), 0.01f);
+        assertTrue(MobileUi.mobileVideoHeightDp(768, 500, false) <= 500);
+    }
+
+    @Test public void signInQrNeverExceedsNarrowOrShortWindow() {
+        float[][] widthsHeights = {{180,220},{240,420},{320,500},
+                {360,760},{393,852},{600,360},{800,600},{1440,900}};
+        for (float[] dims : widthsHeights) {
+            float side = MobileUi.mobileQrSizeDp(dims[0],dims[1]);
+            assertTrue(side > 0 && side <= 272);
+            assertTrue(side <= Math.max(1,dims[0]-56));
+        }
+        assertTrue(MobileUi.compactTouchPlayer(160));
+        assertTrue(!MobileUi.compactTouchPlayer(200));
+    }
+
     @Test
     public void accommodatesNarrowSplitWindowsAndTabletWidth() {
         assertEquals(1, MobileUi.columnsForWidthDp(240, false));
