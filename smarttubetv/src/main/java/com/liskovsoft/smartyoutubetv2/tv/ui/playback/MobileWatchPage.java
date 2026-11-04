@@ -210,11 +210,10 @@ final class MobileWatchPage {
             // instead of shrinking them inside the 16:9 movie letterbox.
             int availableHeight = screen.getHeight() > 0 ? screen.getHeight() :
                     activity.getResources().getDisplayMetrics().heightPixels;
-            int ideal = isShortVideo ? Math.round(width * 16f / 9f)
-                    : Math.round(width * 9f / 16f);
-            params.height = isShortVideo
-                    ? Math.min(ideal, Math.round(availableHeight * 0.68f))
-                    : Math.min(ideal, availableHeight);
+            float density = Math.max(0.1f,
+                    activity.getResources().getDisplayMetrics().density);
+            params.height = Math.round(MobileUi.mobileVideoHeightDp(
+                    width / density, availableHeight / density, isShortVideo) * density);
             params.weight = 0;
             below.setVisibility(View.VISIBLE);
             activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN |
