@@ -31,6 +31,19 @@ final class MobileSponsorMarkersView extends View {
     }
 
     void updateSegments(List<SeekBarSegment> source) {
+        if (source != null && !source.isEmpty()) {
+            // The original chapter controller also calls setSeekBarSegments()
+            // with ALL-BLACK microsegments. Those must not erase SponsorBlock
+            // colours: chapter positions are supplied separately below.
+            boolean chapterOnly = true;
+            for (SeekBarSegment item : source) {
+                if (item != null && (item.color & 0x00FFFFFF) != 0) {
+                    chapterOnly = false;
+                    break;
+                }
+            }
+            if (chapterOnly) return;
+        }
         segments.clear();
         if (source != null) {
             for (SeekBarSegment item : source) {
