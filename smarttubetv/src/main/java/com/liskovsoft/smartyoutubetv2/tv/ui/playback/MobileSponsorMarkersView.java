@@ -6,6 +6,7 @@ import android.graphics.Paint;
 import android.view.View;
 import android.widget.SeekBar;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.SeekBarSegment;
+import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +18,8 @@ import java.util.List;
 final class MobileSponsorMarkersView extends View {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final ArrayList<SeekBarSegment> segments = new ArrayList<>();
+    private final ArrayList<Video> chapters = new ArrayList<>();
+    private long durationMs;
     private final SeekBar progress;
 
     MobileSponsorMarkersView(Context context, SeekBar seekBar) {
@@ -40,9 +43,16 @@ final class MobileSponsorMarkersView extends View {
         invalidate();
     }
 
+    void updateChapters(List<Video> source, long duration) {
+        chapters.clear();
+        if (source != null) chapters.addAll(source);
+        durationMs = duration;
+        invalidate();
+    }
+
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        if (segments.isEmpty()) return;
+        if (segments.isEmpty() && chapters.isEmpty()) return;
         float width = getWidth();
         // Use SeekBar track padding rather than full container width, otherwise
         // 0%/100% segments misalign with the red progress/thumb on phones.
@@ -58,6 +68,18 @@ final class MobileSponsorMarkersView extends View {
             paint.setColor(segment.color);
             canvas.drawRect(startX + start * trackWidth, y - h,
                     startX + end * trackWidth, y + h, paint);
+        }
+        if (durationMs > 0 && !chapters.isEmpty()) {
+            // Native YouTube partitions the progress track at chapter starts.
+            paint.setColor(0xFFFFFFFF);
+            float stroke = MobileUi.dp(getContext(), 2);
+            for (Video chapter : chapters) {
+                if (chapter == null || chapter.startTimeMs <= 0
+                        || chapter.startTimeMs >= durationMs) continue;
+                float x = startX + chapter.startTimeMs * trackWidth / durationMs;
+                canvas.drawRect(x - stroke * .5f, y - h * 1.4f,
+                        x + stroke * .5f, y + h * 1.4f, paint);
+            }
         }
     }
 }
