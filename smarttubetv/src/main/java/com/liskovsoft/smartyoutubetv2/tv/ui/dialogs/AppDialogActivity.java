@@ -57,8 +57,11 @@ public class AppDialogActivity extends MotherActivity {
             if (close != null) close.setOnClickListener(v -> finish());
             // Measured-window changes, font settings, folding and multi-window
             // immediately resize the entire sheet without scrolling it sideways.
-            if (mMobileSheet != null) {
-                mMobileSheet.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, orr, ob) -> {
+            View contentRoot = findViewById(android.R.id.content);
+            if (contentRoot != null) {
+                // Watch the actual WINDOW container, not the capped sheet:
+                // the sheet can remain 640dp wide when split-screen shrinks.
+                contentRoot.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, orr, ob) -> {
                     if ((r - l) != (orr - ol)) requestMobileSettingsLayout();
                 });
             }
