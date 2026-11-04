@@ -96,8 +96,34 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         View root = super.onCreateView(inflater, container, savedInstanceState);
 
         mProgressBarManager.setRootView((ViewGroup) root);
-
+        if (MobileUi.isHandheld(getContext())) {
+            root.post(() -> resizeMobileHeaders(root));
+        }
         return root;
+    }
+
+    /** Fit the original sidebar into the currently visible touch window,
+     * including foldables, rotation and Android split-screen widths. */
+    private void resizeMobileHeaders(View root) {
+        if (root == null || !MobileUi.isHandheld(getContext())) return;
+        View dock = root.findViewById(R.id.browse_headers_dock);
+        if (dock == null) return;
+        float windowDp = MobileUi.windowWidthDp(requireContext());
+        int width = MobileUi.dp(requireContext(),
+                Math.max(100f, Math.min(264f, windowDp * 0.72f)));
+        ViewGroup.LayoutParams params = dock.getLayoutParams();
+        if (params != null && params.width != width) {
+            params.width = width;
+            dock.setLayoutParams(params);
+        }
+    }
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration config) {
+        super.onConfigurationChanged(config);
+        if (getView() != null && MobileUi.isHandheld(getContext())) {
+            getView().post(() -> resizeMobileHeaders(getView()));
+        }
     }
 
     @Override
