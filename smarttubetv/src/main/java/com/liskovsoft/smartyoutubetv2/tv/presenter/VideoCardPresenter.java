@@ -155,6 +155,21 @@ public class VideoCardPresenter extends LongClickPresenter {
             updateDimensions(context);
         }
         cardView.setMainImageDimensions(mWidth, mHeight);
+        if (MobileUi.isHandheld(context)) {
+            // The layout's fixed TV metadata height clips titles at larger
+            // Android font scale settings. Use the user's scaled font size.
+            View details = cardView.findViewById(R.id.info_field);
+            if (details != null) {
+                float scale = context.getResources().getConfiguration().fontScale;
+                int detailsHeight = MobileUi.dp(context,
+                        Math.max(64f, Math.min(120f, 54f * Math.max(1f, scale) + 10f)));
+                ViewGroup.LayoutParams params = details.getLayoutParams();
+                if (params != null && params.height != detailsHeight) {
+                    params.height = detailsHeight;
+                    details.setLayoutParams(params);
+                }
+            }
+        }
 
         if (context instanceof Activity && ((Activity) context).isDestroyed()) {
             // Glide.with(context): IllegalArgumentException: You cannot start a load for a destroyed activity
