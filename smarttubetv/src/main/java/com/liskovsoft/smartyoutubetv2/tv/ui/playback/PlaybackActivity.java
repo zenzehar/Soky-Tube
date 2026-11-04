@@ -238,8 +238,7 @@ public class PlaybackActivity extends LeanbackActivity {
             } else if (keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
                 mPlaybackFragment.skipToPrevious();
                 return true;
-            } else if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
-                    keyCode == KeyEvent.KEYCODE_HEADSETPHOOK) {
+            } else if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
                 mPlaybackFragment.setPlayWhenReady(!mPlaybackFragment.getPlayWhenReady());
                 MobilePlaybackService.refresh();
                 return true;
