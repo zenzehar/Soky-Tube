@@ -1,6 +1,7 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.common;
 
 import android.app.Activity;
+import android.content.ContextWrapper;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -73,6 +74,47 @@ public final class MobileUi {
     /** Full-width YouTube-style feed in portrait; responsive grids on large windows. */
     public static int feedColumnsForWidthDp(float windowWidthDp) {
         return windowWidthDp >= 1080f ? 3 : windowWidthDp >= 600f ? 2 : 1;
+    }
+
+    public static int settingsColumnsForWidthDp(float widthDp) {
+        return widthDp >= 1000f ? 3 : widthDp >= 600f ? 2 : 1;
+    }
+
+    /** Phone gets a full-width settings sheet; larger tablets a centred panel. */
+    public static float settingsPanelWidthDp(float widthDp) {
+        if (widthDp <= 600f) return Math.max(1f, widthDp);
+        return Math.min(Math.max(1f, widthDp - 48f), 640f);
+    }
+
+    /** Estimate just the visible video region, not the entire device screen. */
+    public static float playerHeightDp(Context context) {
+        float density = Math.max(0.1f, context.getResources().getDisplayMetrics().density);
+        Context current = context;
+        for (int i = 0; i < 8 && current != null; i++) {
+            if (current instanceof Activity) {
+                View video = ((Activity) current).findViewById(R.id.mobile_player_frame);
+                if (video != null && video.getHeight() > 0) return video.getHeight() / density;
+                break;
+            }
+            if (!(current instanceof ContextWrapper)) break;
+            Context next = ((ContextWrapper) current).getBaseContext();
+            if (next == current) break;
+            current = next;
+        }
+        Configuration config = context.getResources().getConfiguration();
+        if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            return Math.max(1f, config.screenHeightDp);
+        }
+        return Math.max(1f, windowWidthDp(context) * 9f / 16f);
+    }
+
+    /** Native controls use the same sizing rules for the whole player. */
+    public static boolean showSecondaryPlayerActions(float playerHeightDp) {
+        return playerHeightDp >= 190f;
+    }
+
+    public static boolean showPlayerMetadata(float playerHeightDp) {
+        return playerHeightDp >= 265f;
     }
 
     public static int columns(Context context, int cardWidthResId) {
