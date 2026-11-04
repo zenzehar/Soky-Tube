@@ -1,6 +1,8 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.browse;
 
 import android.graphics.Color;
+import android.content.res.Configuration;
+import android.view.WindowManager;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -24,13 +26,24 @@ import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
  */
 public class BrowseActivity extends LeanbackActivity {
     private static final String TAG = BrowseActivity.class.getSimpleName();
+    private LinearLayout mMobileToolbar;
+    private View mMobileMain;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         try {
             setContentView(R.layout.fragment_main);
-            if (MobileUi.isHandheld(this)) installMobileNavigation();
+            if (MobileUi.isHandheld(this)) {
+                // Use real system insets instead of allowing TV immersive flags to
+                // draw mobile navigation beneath camera cutouts and gesture bars.
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN |
+                        WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+                getWindow().setStatusBarColor(Color.BLACK);
+                getWindow().setNavigationBarColor(Color.BLACK);
+                installMobileNavigation();
+            }
         } catch (NoClassDefFoundError e) {
             MessageHelpers.showMessage(this, e.getMessage());
         }
@@ -46,12 +59,8 @@ public class BrowseActivity extends LeanbackActivity {
         View mainFragment = findViewById(R.id.main_frame);
         if (content == null || mainFragment == null) return;
 
-        final int barHeight = MobileUi.dp(this, 54);
-        FrameLayout.LayoutParams fragmentParams = (FrameLayout.LayoutParams) mainFragment.getLayoutParams();
-        // No bottom toolbar, so the last browsing row stays accessible above gesture navigation.
-        fragmentParams.topMargin = barHeight;
-        fragmentParams.bottomMargin = 0;
-        mainFragment.setLayoutParams(fragmentParams);
+        final int barHeight = MobileUi.toolbarHeightPx(this);
+        mMobileMain = mainFragment;
 
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
@@ -113,6 +122,28 @@ public class BrowseActivity extends LeanbackActivity {
                 FrameLayout.LayoutParams.MATCH_PARENT, barHeight, Gravity.TOP);
         content.addView(toolbar, barParams);
         toolbar.bringToFront();
+        mMobileToolbar = toolbar;
+        applyWindowSizing();
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // Rotations and Android multi-window resizing use current Activity width.
+        // Reflow existing views; do not recreate player/browser state.
+        if (mMobileToolbar != null) applyWindowSizing();
+    }
+
+    private void applyWindowSizing() {
+        if (mMobileToolbar == null || mMobileMain == null) return;
+        int height = MobileUi.toolbarHeightPx(this);
+        FrameLayout.LayoutParams bar = (FrameLayout.LayoutParams) mMobileToolbar.getLayoutParams();
+        bar.height = height;
+        mMobileToolbar.setLayoutParams(bar);
+        FrameLayout.LayoutParams content = (FrameLayout.LayoutParams) mMobileMain.getLayoutParams();
+        content.topMargin = height;
+        content.bottomMargin = 0;
+        mMobileMain.setLayoutParams(content);
     }
 
     @Override
