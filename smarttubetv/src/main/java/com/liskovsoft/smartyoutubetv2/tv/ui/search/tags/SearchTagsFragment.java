@@ -1,6 +1,7 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.search.tags;
 
 import android.os.Bundle;
+import android.view.View;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.speech.SpeechRecognizer;
 import android.text.TextUtils;
@@ -241,7 +242,25 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
         if (item instanceof Video) {
             mSearchPresenter.onVideoItemClicked((Video) item);
         } else if (item instanceof Tag) {
-            startSearch(((Tag) item).tag, false);
+            String suggestion = ((Tag) item).tag;
+            // The TV flow only copies a suggestion into the search field.
+            // On touch phones, selecting a suggestion is itself the search action.
+            startSearch(suggestion, false);
+            if (MobileUi.isHandheld(getContext())) {
+                View view = getView();
+                if (view != null) {
+                    view.post(() -> {
+                        if (!isAdded()) return;
+                        onQueryTextSubmit(suggestion);
+                        android.view.inputmethod.InputMethodManager keyboard =
+                                (android.view.inputmethod.InputMethodManager)
+                                requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                        if (keyboard != null) keyboard.hideSoftInputFromWindow(view.getWindowToken(), 0);
+                    });
+                } else {
+                    onQueryTextSubmit(suggestion);
+                }
+            }
         }
     }
 
