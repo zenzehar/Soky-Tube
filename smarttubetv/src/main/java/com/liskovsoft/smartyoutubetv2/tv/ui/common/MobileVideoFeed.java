@@ -118,7 +118,7 @@ public final class MobileVideoFeed {
     private void updateColumns(int widthPx) {
         float widthDp = widthPx / Math.max(0.1f,
                 context.getResources().getDisplayMetrics().density);
-        int span = widthDp >= 1080f ? 3 : widthDp >= 600f ? 2 : 1;
+        int span = MobileUi.feedColumnsForWidthDp(widthDp);
         if (gridLayoutManager.getSpanCount() != span) {
             gridLayoutManager.setSpanCount(span);
             adapter.notifyDataSetChanged();
