@@ -40,6 +40,7 @@ import java.util.concurrent.TimeUnit;
  */
 public final class MobileVideoFeed {
     public interface OnVideoClick { void onVideo(Video video); }
+    public interface OnVideoVisible { void onVideoVisible(Video video); }
     private static final int INK = Color.rgb(20, 20, 20);
     private static final int SUBTEXT = Color.rgb(104, 104, 104);
     private static final int BACKGROUND = Color.WHITE;
@@ -51,6 +52,7 @@ public final class MobileVideoFeed {
     private final FeedAdapter adapter = new FeedAdapter();
     private final ArrayList<FeedItem> allVideos = new ArrayList<>();
     private final OnVideoClick onVideoClick;
+    private OnVideoVisible onVideoVisible;
     private final boolean showChips;
     private String filter = "All";
     private boolean refreshQueued;
@@ -88,7 +90,16 @@ public final class MobileVideoFeed {
         list.setLayoutManager(new LinearLayoutManager(context));
         list.setAdapter(adapter);
         list.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-        list.setItemAnimator(null); // Updating thumbnails shouldn't animate the entire screen.
+        list.setItemAnimator(null);
+        list.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override public void onScrolled(@NonNull RecyclerView view, int dx, int dy) {
+                if (onVideoVisible == null) return;
+                int position = ((LinearLayoutManager)view.getLayoutManager()).findLastVisibleItemPosition();
+                if (position >= 0 && position < adapter.displayed.size()) {
+                    onVideoVisible.onVideoVisible(adapter.displayed.get(position).video);
+                }
+            }
+        }); // Updating thumbnails shouldn't animate the entire screen.
         list.setClipToPadding(false);
         root.addView(list, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -96,6 +107,7 @@ public final class MobileVideoFeed {
 
     private int dp(float value) { return MobileUi.dp(context, value); }
     public View getView() { return root; }
+    public void setOnVideoVisible(OnVideoVisible callback) { onVideoVisible = callback; }
 
     public void setBottomInsetDp(int bottomDp) {
         list.setPadding(0, 0, 0, dp(bottomDp));
