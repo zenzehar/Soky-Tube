@@ -71,6 +71,15 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override protected void onResume() {
         super.onResume();
         if (mMobileWatch != null) mMobileWatch.resume();
+        // PlaybackFragment previously hid the Leanback row for a temporary
+        // elementary menu. Restore the single original touch-ready control
+        // surface after fragment creation, without drawing a second overlay.
+        if (MobileUi.isHandheld(this) && mPlaybackFragment != null &&
+                mPlaybackFragment.getView() != null) {
+            android.view.View originalControls =
+                    mPlaybackFragment.getView().findViewById(R.id.playback_controls_dock);
+            if (originalControls != null) originalControls.setVisibility(android.view.View.VISIBLE);
+        }
     }
     @Override protected void onStop() {
         if (mMobileWatch != null) mMobileWatch.stop();
