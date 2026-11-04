@@ -30,6 +30,10 @@ final class MobileSponsorMarkersView extends View {
         setWillNotDraw(false);
     }
 
+    /** Legacy Leanback callbacks can mix chapter delimiters with SponsorBlock.
+     * Filter chapter-only data here. The trusted controller method below is
+     * used for actual SponsorBlock categories even if a category colour is black.
+     */
     void updateSegments(List<SeekBarSegment> source) {
         if (source != null && !source.isEmpty()) {
             // The original chapter controller also calls setSeekBarSegments()
@@ -44,6 +48,14 @@ final class MobileSponsorMarkersView extends View {
             }
             if (chapterOnly) return;
         }
+        replaceSegments(source);
+    }
+
+    void updateTrustedSponsorSegments(List<SeekBarSegment> source) {
+        replaceSegments(source);
+    }
+
+    private void replaceSegments(List<SeekBarSegment> source) {
         segments.clear();
         if (source != null) {
             for (SeekBarSegment item : source) {
