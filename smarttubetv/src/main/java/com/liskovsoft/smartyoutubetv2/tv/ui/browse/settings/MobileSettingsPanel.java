@@ -54,7 +54,13 @@ final class MobileSettingsPanel extends RecyclerView {
                 lastWidth = width;
                 int columns = MobileUi.settingsColumnsForWidthDp(
                         width / Math.max(0.1f, getResources().getDisplayMetrics().density));
-                if (grid.getSpanCount() != columns) grid.setSpanCount(columns);
+                if (grid.getSpanCount() != columns) {
+                    // Change column count after the current layout traversal;
+                    // this avoids re-entrant RecyclerView layout exceptions.
+                    post(() -> {
+                        if (grid.getSpanCount() != columns) grid.setSpanCount(columns);
+                    });
+                }
             }
         });
     }
