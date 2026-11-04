@@ -50,6 +50,7 @@ final class MobileWatchPage {
         // A single phone-only control surface delegates to the ORIGINAL
         // playback engine; the oversized TV transport is hidden on mobile.
         touchControls = new MobileTouchPlayerControls(activity, player, videoFrame);
+        touchControls.setSponsorSegments(player.getMobileSponsorSegments());
         LinearLayout description = new LinearLayout(activity);
         description.setOrientation(LinearLayout.VERTICAL);
         description.setPadding(dp(14), dp(12), dp(14), dp(8));
@@ -188,6 +189,10 @@ final class MobileWatchPage {
         if (wasShort != isShortVideo) videoFrame.post(this::applyLayout);
         touchControls.setVisible(true);
     }
+    void setSponsorSegments(java.util.List<com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.SeekBarSegment> segments) {
+        touchControls.setSponsorSegments(segments);
+    }
+
     void onSuggestions(ObjectAdapter rows) {
         feed.scheduleRows(rows);
     }
