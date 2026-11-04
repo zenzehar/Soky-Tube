@@ -1,0 +1,70 @@
+name: Soky Tube mobile preview APK
+
+on:
+  push:
+    branches:
+      - 'feature/mobile-touch-android-*'
+      - 'feature/mobile-v4-native-layout-*'
+      - 'feature/mobile-v5-responsive-controls-settings-*'
+      - 'feature/mobile-v6-touch-polish-*'
+      - 'feature/mobile-v7-youtube-settings-pip-media-*'
+  workflow_dispatch:
+
+concurrency:
+  group: soky-mobile-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  mobile-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout with Git submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Install project Android SDK and NDK
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDK_MANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -1)"
+          test -n "$SDK_MANAGER"
+          yes | "$SDK_MANAGER" --licenses > /dev/null || true
+          "$SDK_MANAGER" "platforms;android-34" "build-tools;34.0.0" "ndk;21.0.6113669"
+      - name: Test responsive phone and tablet sizing
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileUiSizingTest"
+      - name: Build installable debug-signed mobile APK
+        run: |
+          ./gradlew --no-daemon --stacktrace assembleStmobileDebug
+      - name: Stage APKs
+        run: |
+          mkdir -p dist
+          cp smarttubetv/build/outputs/apk/stmobile/debug/*_universal.apk dist/SokyTube_Mobile_preview_universal.apk
+          cp smarttubetv/build/outputs/apk/stmobile/debug/*_arm64-v8a.apk dist/SokyTube_Mobile_preview_arm64.apk
+          sha256sum dist/*.apk > dist/SHA256SUMS.txt
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SokyTube-mobile-preview
+          path: dist/
+          if-no-files-found: error
+      - name: Publish installable preview release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create mobile-preview-v7-comments-sponsor-20261105 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.1 - Comments and SponsorBlock Markers (5 Nov 2026)" \
+            --notes "Mobile v7.1: functional YouTube-like comments/replies with touch sheets, working SponsorBlock category markers painted on the native player progress track, including late duration updates and chapters; adds PiP/background/notification and driver-safe media controls from v7. Preview, device testing required." \
+            --prerelease --target "$GITHUB_SHA" \
+          || gh release upload mobile-preview-v7-comments-sponsor-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber

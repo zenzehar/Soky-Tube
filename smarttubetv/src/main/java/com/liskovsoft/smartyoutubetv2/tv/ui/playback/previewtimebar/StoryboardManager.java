@@ -112,6 +112,21 @@ public class StoryboardManager {
         return mStoryboard.getGroupDurationMS() / ((long) groupSize.getRowCount() * groupSize.getColCount());
     }
 
+    /** Direct phone scrubbing lookup reuses the TV storyboard/Glide cache. */
+    public void getBitmapAtMs(long positionMs, Callback callback) {
+        if (callback != null && mStoryboard != null && mLengthMs > 0) {
+            loadPreview(Math.min(Math.max(0L, positionMs),
+                    Math.max(0L, mLengthMs - 1L)), callback);
+        }
+    }
+
+    public void release() {
+        RxHelper.disposeActions(mFormatAction);
+        mStoryboard = null;
+        mSeekPositions = null;
+        mCachedImageNums.clear();
+    }
+
     public long[] getSeekPositions() {
         if (mSeekPositions == null || mSeekPositions.length < 10) {
             // Preventing from video being skipped fully

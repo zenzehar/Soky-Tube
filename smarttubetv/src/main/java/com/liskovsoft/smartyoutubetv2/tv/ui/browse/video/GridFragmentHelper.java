@@ -13,6 +13,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.models.data.VideoGroup;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ViewManager;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.tv.R;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import com.liskovsoft.smartyoutubetv2.tv.adapter.VideoGroupObjectAdapter;
 
 import java.util.HashMap;
@@ -44,6 +45,11 @@ public class GridFragmentHelper {
     }
 
     private static float getMaxColsNumFloat(Context context, int cardWidthResId, float cardScale) {
+        // Phone/tablet widths change across rotations and split-screen resizing.
+        // Bypass the TV-only static cache so no stale landscape column count survives.
+        if (MobileUi.isHandheld(context)) {
+            return MobileUi.columns(context, cardWidthResId);
+        }
         Float maxColsNum = sMaxColsNum.get(cardWidthResId);
 
         if (maxColsNum != null) {
@@ -90,6 +96,9 @@ public class GridFragmentHelper {
     }
 
     public static Pair<Integer, Integer> getCardDimensPx(Context context, int cardWidthResId, int cardHeightResId, float cardScale, boolean isSingleColumn) {
+        if (MobileUi.isHandheld(context)) {
+            return MobileUi.cardSize(context, cardWidthResId, cardHeightResId);
+        }
         Pair<Integer, Integer> cardDimensPx = sCardDimensPx.get(cardWidthResId);
         if (cardDimensPx != null) {
             return cardDimensPx;
@@ -115,7 +124,7 @@ public class GridFragmentHelper {
         // Get into consideration the space from the grid sides
         float colsNum = getMaxColsNumFloat(context, cardWidthResId, cardScale);
         int colsNumRounded = (int) colsNum;
-        float colsReminder = (colsNum - colsNumRounded) / colsNumRounded;
+        float colsReminder = (colsNum - colsNumRounded) / Math.max(1, colsNumRounded);
 
         float width = cardWidthPx + cardWidthPx * colsReminder;
         float height = cardHeightPx + cardHeightPx * colsReminder;

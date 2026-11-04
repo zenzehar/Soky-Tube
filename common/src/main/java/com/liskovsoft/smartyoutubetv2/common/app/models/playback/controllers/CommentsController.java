@@ -46,6 +46,43 @@ public class CommentsController extends BasePlayerController {
         }
     }
 
+    /** The mobile watch page supplies only a presentation of comments.
+     * Queries, paging, replies and likes remain owned by this controller.
+     */
+    public interface MobileReplyOpener {
+        void show(CommentsReceiver receiver, String title);
+    }
+
+    public CommentsReceiver createMobileReceiver(MobileReplyOpener replies) {
+        if (mCommentsKey == null || mLiveChatKey != null) return null;
+        final String key = mCommentsKey;
+        return createMobileReceiver(key, replies);
+    }
+
+    private CommentsReceiver createMobileReceiver(String key, MobileReplyOpener replies) {
+        return new AbstractCommentsReceiver(getContext()) {
+            @Override public void onStart() {
+                if (key != null) loadComments(this, key);
+            }
+            @Override public void onLoadMore(CommentGroup group) {
+                if (group != null && group.getNextCommentsKey() != null)
+                    loadComments(this, group.getNextCommentsKey());
+            }
+            @Override public void onCommentClicked(CommentItem item) {
+                if (item == null || item.isEmpty() || item.getNestedCommentsKey() == null) return;
+                CommentsReceiver replyReceiver = createMobileReceiver(item.getNestedCommentsKey(), replies);
+                if (replies != null) replies.show(replyReceiver, "Replies");
+            }
+            @Override public void onCommentLongClicked(CommentItem item) {
+                if (item != null && !item.isEmpty()) toggleLike(this, item);
+            }
+            @Override public void onFinish(Backup backup) {
+                super.onFinish(backup);
+                disposeActions();
+            }
+        };
+    }
+
     private void openCommentsDialog() {
         fitVideoIntoDialog();
 
