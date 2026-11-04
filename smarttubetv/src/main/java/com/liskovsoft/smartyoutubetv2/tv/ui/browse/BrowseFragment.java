@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.view.View;
 import android.view.ViewGroup;
 
@@ -108,6 +109,14 @@ public class BrowseFragment extends BrowseSupportFragment implements BrowseView 
         prepareEntranceTransition();
 
         mBrowsePresenter.onViewInitialized();
+
+        // On a narrow touch device start with full-width content; the new
+        // Sections button restores access to the existing Leanback sidebar.
+        if (MobileUi.isHandheld(getContext()) && getView() != null) {
+            getView().post(() -> {
+                if (isAdded()) startHeadersTransitionSafe(false);
+            });
+        }
 
         // Restore state after crash
         mCrashRestorer.restoreHeader((idx, video) -> {
