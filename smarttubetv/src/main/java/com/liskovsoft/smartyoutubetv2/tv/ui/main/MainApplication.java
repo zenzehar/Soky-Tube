@@ -1,6 +1,7 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.main;
 
 import android.os.Build.VERSION;
+import android.content.Context;
 
 import androidx.annotation.NonNull;
 import androidx.multidex.MultiDexApplication;
@@ -52,6 +53,42 @@ public class MainApplication extends MultiDexApplication implements Configuratio
         // Another IPv6 fix (no effect)
         // https://stackoverflow.com/questions/1920623/sometimes-httpurlconnection-getinputstream-executes-too-slowly
         //System.setProperty("java.net.preferIPv4Stack" , "true");
+    }
+
+    // Phone-preview crash reports remain on-device until the user copies or dismisses them.
+    // Never upload reports or change the original SmartTube TV application.
+    private static final String MOBILE_CRASH_PREFS = "soky_mobile_crash_report";
+    private static final String MOBILE_CRASH_KEY = "last_fatal_error";
+    private static volatile String sMobilePlaybackPhase = "application startup";
+
+    public static void setMobilePlaybackPhase(String phase) {
+        sMobilePlaybackPhase = phase;
+    }
+
+    public static String consumeMobileCrashReport(Context context) {
+        android.content.SharedPreferences prefs =
+                context.getSharedPreferences(MOBILE_CRASH_PREFS, Context.MODE_PRIVATE);
+        String report = prefs.getString(MOBILE_CRASH_KEY, null);
+        if (report != null) prefs.edit().remove(MOBILE_CRASH_KEY).commit();
+        return report;
+    }
+
+    private void storeMobileCrash(Thread thread, Throwable error) {
+        if (!"com.sokytube.mobile".equals(getPackageName())) return;
+        try {
+            java.io.StringWriter buffer = new java.io.StringWriter();
+            error.printStackTrace(new java.io.PrintWriter(buffer));
+            String report = "Soky Tube mobile recovery v7.2\n"
+                    + "When: " + new java.util.Date() + "\n"
+                    + "Phase: " + sMobilePlaybackPhase + "\n"
+                    + "Thread: " + thread.getName() + "\n\n"
+                    + buffer.toString();
+            if (report.length() > 12000) report = report.substring(0, 12000);
+            getSharedPreferences(MOBILE_CRASH_PREFS, Context.MODE_PRIVATE)
+                    .edit().putString(MOBILE_CRASH_KEY, report).commit();
+        } catch (Throwable ignored) {
+            // Preserve the platform crash reporter even if storage is unavailable.
+        }
     }
 
     @Override
@@ -146,6 +183,7 @@ public class MainApplication extends MultiDexApplication implements Configuratio
         }
 
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            storeMobileCrash(t, e);
             if (shouldIgnore(e)) {
                 MessageHelpers.showLongMessage(this, e.getMessage());
                 return;

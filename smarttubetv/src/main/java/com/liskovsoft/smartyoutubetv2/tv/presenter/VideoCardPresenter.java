@@ -6,6 +6,7 @@ import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.os.Build.VERSION;
 import android.util.Pair;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -57,12 +58,13 @@ public class VideoCardPresenter extends LongClickPresenter {
         mSelectedTextColor =
                 ContextCompat.getColor(context, R.color.card_selected_text_grey);
 
-        mCardPreviewType = getCardPreviewType(context);
+        // Avoid costly focus-triggered video previews during finger scrolling.
+        mCardPreviewType = MobileUi.isHandheld(context) ? MainUIData.CARD_PREVIEW_DISABLED : getCardPreviewType(context);
         mThumbQuality = getThumbQuality(context);
 
-        boolean isCardMultilineTitleEnabled = isCardMultilineTitleEnabled(context);
-        boolean isCardMultilineSubtitleEnabled = isCardMultilineSubtitleEnabled(context);
-        boolean isCardTextAutoScrollEnabled = isCardTextAutoScrollEnabled(context);
+        boolean isCardMultilineTitleEnabled = MobileUi.isHandheld(context) || isCardMultilineTitleEnabled(context);
+        boolean isCardMultilineSubtitleEnabled = !MobileUi.isHandheld(context) && isCardMultilineSubtitleEnabled(context);
+        boolean isCardTextAutoScrollEnabled = !MobileUi.isHandheld(context) && isCardTextAutoScrollEnabled(context);
         float cardTextScrollSpeed = getCardTextScrollSpeed(context);
 
         updateDimensions(context);
@@ -93,8 +95,13 @@ public class VideoCardPresenter extends LongClickPresenter {
     }
 
     private void updateCardBackgroundColor(ComplexImageCardView view, boolean selected) {
-        int backgroundColor = selected ? mSelectedBackgroundColor : mDefaultBackgroundColor;
-        int textColor = selected ? mSelectedTextColor : mDefaultTextColor;
+        boolean mobile = MobileUi.isHandheld(view.getContext());
+        // TV focus paints the active card white; on touch this looks like a
+        // permanent, mismatched selection after the last tap.
+        int backgroundColor = mobile ? (selected ? 0xFF24252A : 0xFF1A1B1F)
+                : (selected ? mSelectedBackgroundColor : mDefaultBackgroundColor);
+        int textColor = mobile ? android.graphics.Color.WHITE
+                : (selected ? mSelectedTextColor : mDefaultTextColor);
 
         // Both background colors should be set because the view's
         // background is temporarily visible during animations.
@@ -143,7 +150,26 @@ public class VideoCardPresenter extends LongClickPresenter {
             cardView.setMute(mCardPreviewType == MainUIData.CARD_PREVIEW_MUTED);
         }
 
+        if (MobileUi.isHandheld(context)) {
+            // Recompute after phone rotation or tablet window resize.
+            updateDimensions(context);
+        }
         cardView.setMainImageDimensions(mWidth, mHeight);
+        if (MobileUi.isHandheld(context)) {
+            // The layout's fixed TV metadata height clips titles at larger
+            // Android font scale settings. Use the user's scaled font size.
+            View details = cardView.findViewById(R.id.info_field);
+            if (details != null) {
+                float scale = context.getResources().getConfiguration().fontScale;
+                int detailsHeight = MobileUi.dp(context,
+                        Math.max(64f, Math.min(120f, 54f * Math.max(1f, scale) + 10f)));
+                ViewGroup.LayoutParams params = details.getLayoutParams();
+                if (params != null && params.height != detailsHeight) {
+                    params.height = detailsHeight;
+                    details.setLayoutParams(params);
+                }
+            }
+        }
 
         if (context instanceof Activity && ((Activity) context).isDestroyed()) {
             // Glide.with(context): IllegalArgumentException: You cannot start a load for a destroyed activity

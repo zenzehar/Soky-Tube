@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Mobile preview only: clean installs must not silently restore old
+         preferences from Android Backup, which obscures crash diagnosis. -->
+    <application android:allowBackup="false"
+        tools:replace="android:allowBackup" />
+</manifest>

@@ -3,6 +3,8 @@ package com.liskovsoft.smartyoutubetv2.tv.ui.playback;
 import android.media.session.PlaybackState;
 import android.os.Build.VERSION;
 import android.os.Bundle;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
+import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
@@ -120,6 +122,39 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     private boolean mIsEngineBlocked;
     private MediaSessionCompat mMediaSession;
     private MediaSessionConnector mMediaSessionConnector;
+    private List<SeekBarSegment> mMobileSponsorSegments;
+    private List<Video> mMobileChapters = java.util.Collections.emptyList();
+
+    List<Video> getMobileChapters() { return mMobileChapters; }
+
+
+    List<SeekBarSegment> getMobileSponsorSegments() {
+        return mMobileSponsorSegments;
+    }
+
+    /**
+     * Recalculate SponsorBlock track fractions after playback duration is
+     * available. The controller checks the current video ID and preferences.
+     */
+    List<SeekBarSegment> getMobileSponsorSegmentsForDuration(long duration) {
+        if (duration <= 0 || mPlaybackPresenter == null) {
+            return java.util.Collections.emptyList();
+        }
+        com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.SponsorBlockController sponsor =
+                mPlaybackPresenter.getController(
+                  com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.SponsorBlockController.class);
+        return sponsor != null ? sponsor.getMobileSeekBarSegments(duration)
+                : java.util.Collections.emptyList();
+    }
+
+    private boolean mKeepMobilePlaybackInBackground;
+
+    void keepMobilePlaybackInBackground(boolean enabled) {
+        if (MobileUi.isHandheld(getContext())) {
+            mKeepMobilePlaybackInBackground = enabled;
+            if (enabled) blockEngine(true);
+        }
+    }
     private DoubleTapPlayerAdapter mDoubleTapPlayerAdapter;
     private YouTubeOverlay mYouTubeOverlay;
     private Boolean mIsControlsShownPreviously;
@@ -158,6 +193,16 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         super.onActivityCreated(savedInstanceState);
 
         mPlaybackPresenter.onViewInitialized();
+        if (MobileUi.isHandheld(getContext()) && getView() != null) {
+            getView().post(() -> {
+                if (!isAdded() || getView() == null) return;
+                // One phone control surface only. Hide the TV Leanback dock
+                // entirely, while keeping its playback action adapter alive.
+                View tvDock = getView().findViewById(R.id.playback_controls_dock);
+                if (tvDock != null) tvDock.setVisibility(View.GONE);
+                super.hideControlsOverlay(false);
+            });
+        }
 
         if (mSelectedVideoId != null) {
             mPlaybackPresenter.openVideo(mSelectedVideoId);
@@ -217,7 +262,9 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     public void onStop() {
         super.onStop();
 
-        if (Util.SDK_INT > 23) {
+        if (Util.SDK_INT > 23 &&
+                !(MobileUi.isHandheld(getContext()) && mKeepMobilePlaybackInBackground
+                    && mExoPlayerController != null && mExoPlayerController.containsMedia())) {
             maybeReleasePlayer();
         }
     }
@@ -234,6 +281,7 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         mPlaybackPresenter.onViewResumed();
 
         showHideWidgets(true); // PIP mode fix
+        mKeepMobilePlaybackInBackground = false;
         blockEngine(false); // reset bg mode
         //ExoPlayerInitializer.enableAudioFocus(mPlayer, true); // Restore focus after PIP
     }
@@ -245,7 +293,8 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         // NOTE: don't move this into another place! Multiple components rely on it.
         mPlaybackPresenter.onViewPaused();
 
-        if (Util.SDK_INT <= 23) {
+        if (Util.SDK_INT <= 23 &&
+                !(MobileUi.isHandheld(getContext()) && mKeepMobilePlaybackInBackground)) {
             maybeReleasePlayer();
         }
 
@@ -258,6 +307,9 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     public void onDispatchTouchEvent(MotionEvent event) {
+        // The sole mobile touch surface now owns taps, precise seek drags and
+        // double-tap skip. Do not issue a second TV overlay/tickle event.
+        if (MobileUi.isHandheld(getContext())) return;
         if (mDoubleTapPlayerAdapter != null && !isOverlayShown()) {
             boolean handled = mDoubleTapPlayerAdapter.onTouchEvent(event);
 
@@ -290,6 +342,69 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         }
 
         mPlaybackPresenter.onFinish();
+    }
+
+    /** Refresh only the existing controls after a phone rotation or window resize. */
+    void openMobileComments() {
+        if (!(getActivity() instanceof PlaybackActivity) || mPlaybackPresenter == null) return;
+        PlaybackActivity activity = (PlaybackActivity) getActivity();
+        com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.CommentsController controller =
+                mPlaybackPresenter.getController(com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.CommentsController.class);
+        if (controller == null) return;
+        com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.CommentsReceiver receiver =
+                controller.createMobileReceiver((replies, title) ->
+                        MobileCommentsSheet.show(activity, replies, title));
+        if (receiver != null) {
+            MobileCommentsSheet.show(activity, receiver, "Comments");
+        } else {
+            android.widget.Toast.makeText(activity, "Comments unavailable for this video",
+                    android.widget.Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    public void mobileAction(int actionId) {
+        if (mPlaybackPresenter == null) return;
+        int state = 0;
+        try {
+            if (mPlayerGlue != null) state = mPlayerGlue.getButtonState(actionId);
+        } catch (RuntimeException ignored) {}
+        mPlaybackPresenter.onButtonClicked(actionId, state);
+    }
+
+    private final java.util.Set<String> mMobilePagedRecommendations = new java.util.HashSet<>();
+
+    public void onMobileSuggestionVisible(Video video) {
+        if (video == null || mVideoGroupAdapters == null || mPlaybackPresenter == null) return;
+        for (VideoGroupObjectAdapter group : mVideoGroupAdapters.values()) {
+            int index = group.indexOf(video);
+            if (index < 0 || index < group.size() - ViewUtil.ROW_SCROLL_CONTINUE_NUM) continue;
+            Video last = (Video) group.get(group.size() - 1);
+            String key = last.videoId != null ? last.videoId : last.toString();
+            if (mMobilePagedRecommendations.add(key)) mPlaybackPresenter.onScrollEnd(last);
+            break;
+        }
+    }
+
+    public void openMobileSuggestion(Video video) {
+        if (video != null && mPlaybackPresenter != null) {
+            mPlaybackPresenter.onSuggestionItemClicked(video);
+        }
+    }
+
+    private void reportMobileSuggestions() {
+        if (!MobileUi.isHandheld(getContext()) || getView() == null) return;
+        // Post AFTER the existing adapters handle the video group mutation.
+        getView().post(() -> {
+            if (getActivity() instanceof PlaybackActivity && mRowsAdapter != null) {
+                ((PlaybackActivity) getActivity()).onMobileSuggestionsChanged(mRowsAdapter);
+            }
+        });
+    }
+
+    public void onMobileWindowResized() {
+        if (getView() != null && mPlayerGlue != null) {
+            notifyPlaybackRowChanged();
+        }
     }
 
     public void onPIPChanged(boolean isInPIP) {
@@ -424,8 +539,12 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
             mMediaSessionConnector = null;
         }
         if (mMediaSession != null) {
-            mMediaSession.setActive(false);
-            mMediaSession.release();
+            if (MobileUi.isHandheld(getContext())) {
+                MobilePlaybackService.detachMediaSession(mMediaSession);
+            } else {
+                mMediaSession.setActive(false);
+                mMediaSession.release();
+            }
             mMediaSession = null;
         }
         if (mPlayerGlue != null) {
@@ -614,8 +733,11 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         }
 
         // NOTE: No way to disable only a notifications. We need to disable the media session instead.
-        boolean disableNotifications = getPlayerTweaksData().isPlaybackNotificationsDisabled();
-        mMediaSession = new MediaSessionCompat(getContext().getApplicationContext(), getContext().getPackageName()); // NOTE: mem leak fix (SegmentTimelineElement)
+        boolean mobile = MobileUi.isHandheld(getContext());
+        boolean disableNotifications = !mobile && getPlayerTweaksData().isPlaybackNotificationsDisabled();
+        mMediaSession = mobile ? MobilePlaybackService.session(getContext())
+                : new MediaSessionCompat(getContext().getApplicationContext(),
+                        getContext().getPackageName());
         mMediaSession.setActive(!disableNotifications);
         mMediaSessionConnector = new MediaSessionConnector(mMediaSession);
 
@@ -836,7 +958,15 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
     @Override
     public void setVideo(Video video) {
+        if (MobileUi.isHandheld(getContext())) {
+            mMobileChapters = java.util.Collections.emptyList();
+            if (getActivity() instanceof PlaybackActivity)
+                ((PlaybackActivity) getActivity()).onMobileChaptersChanged(mMobileChapters);
+        }
         mExoPlayerController.setVideo(video);
+        if (MobileUi.isHandheld(getContext()) && getActivity() instanceof PlaybackActivity) {
+            ((PlaybackActivity) getActivity()).onMobileVideoChanged(video);
+        }
 
         if (mPlayerGlue != null && video != null) {
             // Preserve player formatting
@@ -920,8 +1050,16 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
     @Override
     public void setSeekBarSegments(List<SeekBarSegment> segments) {
-        if (mPlayerGlue != null) {
-            mPlayerGlue.setSeekBarSegments(segments);
+        if (mPlayerGlue != null) mPlayerGlue.setSeekBarSegments(segments);
+        if (MobileUi.isHandheld(getContext())) {
+            // SponsorBlock runs asynchronous fetches; marshal Android view
+            // updates to the main thread and discard stale lists on new video.
+            mMobileSponsorSegments = segments == null ? null : new java.util.ArrayList<>(segments);
+            if (getActivity() instanceof PlaybackActivity) {
+                PlaybackActivity activity = (PlaybackActivity) getActivity();
+                activity.runOnUiThread(() ->
+                    activity.onMobileSponsorSegmentsChanged(mMobileSponsorSegments));
+            }
         }
     }
 
@@ -1264,15 +1402,19 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
      */
     @Override
     public void showOverlay(boolean show) {
-        if (forbidShowOverlay(show)) {
+        if (forbidShowOverlay(show)) return;
+        if (MobileUi.isHandheld(getContext())) {
+            if (getActivity() instanceof PlaybackActivity) {
+                ((PlaybackActivity) getActivity()).onMobileControlsRequested(show);
+            }
+            if (getView() != null) {
+                View tvDock = getView().findViewById(R.id.playback_controls_dock);
+                if (tvDock != null) tvDock.setVisibility(View.GONE);
+            }
             return;
         }
-
-        if (show) {
-            showControlsOverlay(true);
-        } else {
-            hideControlsOverlay(true);
-        }
+        if (show) showControlsOverlay(true);
+        else hideControlsOverlay(true);
     }
 
     @Override
@@ -1364,6 +1506,13 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
     @Override
     public void updateSuggestions(VideoGroup group) {
+        if (MobileUi.isHandheld(getContext()) && group != null && group.isChapters()) {
+            mMobileChapters = new java.util.ArrayList<>(group.getVideos());
+            if (getActivity() instanceof PlaybackActivity) {
+                ((PlaybackActivity) getActivity()).onMobileChaptersChanged(mMobileChapters);
+            }
+        }
+        reportMobileSuggestions();
         if (mRowsAdapter == null) {
             Log.e(TAG, "Related videos row not initialized yet.");
             return;
@@ -1420,6 +1569,7 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
     @Override
     public void removeSuggestions(VideoGroup group) {
+        reportMobileSuggestions();
         if (group == null) {
             return;
         }

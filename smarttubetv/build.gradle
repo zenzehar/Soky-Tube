@@ -159,6 +159,14 @@ android {
 
     // NOTE: The main goal of prefixing a flavor is to group flavors' folders together
     productFlavors {
+        stmobile {
+            // Independent install: never overwrites an existing SmartTube TV installation.
+            applicationId "com.sokytube.mobile"
+            versionCode 2460
+            versionName "32.70-soky-v7.2-recovery"
+            targetSdkVersion project.properties.compileSdkVersion
+            matchingFallbacks = ["stbeta"]
+        }
         stbeta {
             applicationId "org.smarttube.beta"
             targetSdkVersion project.properties.compileSdkVersion

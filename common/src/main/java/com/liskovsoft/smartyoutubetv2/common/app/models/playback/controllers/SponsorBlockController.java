@@ -34,13 +34,13 @@ public class SponsorBlockController extends BasePlayerController {
     private static final long POLL_INTERVAL_MS = 1_000;
     private static final int CONTENT_BLOCK_ID = 144;
     private MediaItemService mMediaItemService;
-    private List<SponsorSegment> mOriginalSegments;
+    private volatile List<SponsorSegment> mOriginalSegments;
     private List<SponsorSegment> mActiveSegments;
     private long mLastSkipPosMs;
     private boolean mSkipExclude;
     private Disposable mSegmentsAction;
     private Observable<List<SponsorSegment>> mCachedSegmentsAction;
-    private String mVideoId;
+    private volatile String mVideoId;
 
     public static class SegmentAction {
         public String segmentCategory;
@@ -87,6 +87,11 @@ public class SponsorBlockController extends BasePlayerController {
     @Override
     public void onNewVideo(Video item) {
         mSkipExclude = false;
+        // Clear the previous video's asynchronously fetched categories before
+        // this video's SponsorBlock request begins. Otherwise late-duration UI
+        // refresh can briefly paint stale segments against a different video.
+        mOriginalSegments = null;
+        mActiveSegments = null;
         if (getPlayer() != null) {
             getPlayer().setSeekBarSegments(null); // reset colors
         }
@@ -174,6 +179,8 @@ public class SponsorBlockController extends BasePlayerController {
         }
 
         if (!Helpers.equals(mVideoId, item.videoId) || mCachedSegmentsAction == null) {
+            mOriginalSegments = null;
+            mActiveSegments = null;
             // NOTE: SponsorBlock (when happened java.net.SocketTimeoutException) could block whole application with Schedulers.io()
             // Because Schedulers.io() reuses blocked threads in RxJava 2: https://github.com/ReactiveX/RxJava/issues/6542
             mCachedSegmentsAction = mMediaItemService.getSponsorSegmentsObserve(item.videoId, getSponsorBlockData().getEnabledCategories())
@@ -310,12 +317,34 @@ public class SponsorBlockController extends BasePlayerController {
         dialogPresenter.showDialog(getContext().getString(R.string.content_block_provider));
     }
 
-    private List<SeekBarSegment> toSeekBarSegments(List<SponsorSegment> segments) {
-        if (segments == null) {
-            return null;
+    /**
+     * Regenerate coloured markers when the actual player duration resolves.
+     * This avoids losing segments when SponsorBlock responds before ExoPlayer
+     * supplies a duration, and respects category and user display settings.
+     */
+    public List<SeekBarSegment> getMobileSeekBarSegments(long durationMs) {
+        Video video = getVideo();
+        if (durationMs <= 0 || video == null || video.videoId == null ||
+                !Helpers.equals(video.videoId, mVideoId) ||
+                !getSponsorBlockData().isSponsorBlockEnabled() ||
+                !getSponsorBlockData().isColorMarkersEnabled() ||
+                mOriginalSegments == null || mOriginalSegments.isEmpty()) {
+            return java.util.Collections.emptyList();
         }
+        return toSeekBarSegments(mOriginalSegments, durationMs);
+    }
 
+    private List<SeekBarSegment> toSeekBarSegments(List<SponsorSegment> segments) {
+        long knownDuration = getPlayer() != null ? getPlayer().getDurationMs() : -1L;
+        Video current = getVideo();
+        if (knownDuration <= 0 && current != null) knownDuration = current.getDurationMs();
+        return toSeekBarSegments(segments, knownDuration);
+    }
+
+    private List<SeekBarSegment> toSeekBarSegments(List<SponsorSegment> segments, long durationMs) {
+        if (segments == null) return null;
         List<SeekBarSegment> result = new ArrayList<>();
+        if (durationMs <= 0) return result;
 
         for (SponsorSegment sponsorSegment : segments) {
             if (!getSponsorBlockData().isColorMarkerEnabled(sponsorSegment.getCategory())) {
@@ -323,8 +352,10 @@ public class SponsorBlockController extends BasePlayerController {
             }
 
             SeekBarSegment seekBarSegment = new SeekBarSegment();
-            float startRatio = (float) sponsorSegment.getStartMs() / getPlayer().getDurationMs(); // Range: [0, 1]
-            float endRatio = (float) sponsorSegment.getEndMs() / getPlayer().getDurationMs(); // Range: [0, 1]
+            float startRatio = (float) sponsorSegment.getStartMs() / durationMs;
+            float endRatio = (float) sponsorSegment.getEndMs() / durationMs;
+            if (!Float.isFinite(startRatio) || !Float.isFinite(endRatio) ||
+                    endRatio <= startRatio || endRatio <= 0f || startRatio >= 1f) continue;
             seekBarSegment.startProgress = startRatio;
             seekBarSegment.endProgress = endRatio;
             seekBarSegment.color = ContextCompat.getColor(getContext(), getSponsorBlockData().getColorRes(sponsorSegment.getCategory()));

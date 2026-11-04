@@ -1,6 +1,13 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.browse.video;
 
 import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileVideoFeed;
+import android.content.res.Configuration;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.leanback.app.RowsSupportFragment;
@@ -52,6 +59,8 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
     private ShortsCardPresenter mShortsPresenter;
     private int mSelectedRowIndex = -1;
     private ChannelHeaderCallback mChannelHeaderCallback;
+    private MobileVideoFeed mMobileFeed;
+    private final java.util.Set<String> mMobilePagedVideos = new java.util.HashSet<>();
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -65,6 +74,58 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         setupAdapter();
         setupEventListeners();
         applyPendingUpdates();
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (MobileUi.isHandheld(getContext()) && mVideoGroupAdapters != null) {
+            // Rebind visible cards so resized widths are applied when rotating
+            // without replacing the existing scroll position or data adapters.
+            for (VideoGroupObjectAdapter adapter : mVideoGroupAdapters.values()) {
+                if (adapter != null && adapter.size() > 0) {
+                    adapter.notifyItemRangeChanged(0, adapter.size());
+                }
+            }
+        }
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+                             Bundle savedInstanceState) {
+        View tvContent = super.onCreateView(inflater, container, savedInstanceState);
+        if (!MobileUi.isHandheld(getContext()) || tvContent == null) return tvContent;
+        FrameLayout frame = new FrameLayout(requireContext());
+        frame.addView(tvContent, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Keep the original view attached for Leanback callbacks and pagination,
+        // but never render or accept touch in it on a phone.
+        tvContent.setVisibility(View.INVISIBLE);
+        mMobileFeed = new MobileVideoFeed(requireContext(), video -> {
+            if (mMainPresenter != null) mMainPresenter.onVideoItemClicked(video);
+        }, true);
+        mMobileFeed.setBottomInsetDp(16);
+        mMobileFeed.setOnVideoVisible(video -> {
+            if (video == null || mVideoGroupAdapters == null || mMainPresenter == null) return;
+            for (VideoGroupObjectAdapter group : mVideoGroupAdapters.values()) {
+                int index = group.indexOf(video);
+                if (index < 0 || index < group.size() - ViewUtil.ROW_SCROLL_CONTINUE_NUM) continue;
+                Video last = (Video) group.get(group.size() - 1);
+                String pageKey = last.videoId != null ? last.videoId : last.toString();
+                if (mMobilePagedVideos.add(pageKey)) mMainPresenter.onScrollEnd(last);
+                break;
+            }
+        });
+        frame.addView(mMobileFeed.getView(), new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        mMobileFeed.scheduleRows(mRowsAdapter);
+        return frame;
+    }
+
+    @Override
+    public void onDestroyView() {
+        mMobileFeed = null;
+        super.onDestroyView();
     }
 
     protected void addHeader(ChannelHeaderCallback callback) {
@@ -111,6 +172,7 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
 
     @Override
     public void clear() {
+        if (mMobileFeed != null) mMobileFeed.scheduleRows(mRowsAdapter);
         if (mRowsAdapter != null) {
             mRowsAdapter.clear();
             if (mChannelHeaderCallback != null) {
@@ -205,6 +267,8 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
 
     @Override
     public void update(VideoGroup group) {
+        // Update after the TV-backed data adapter changes, including paging.
+        if (mMobileFeed != null) mMobileFeed.scheduleRows(mRowsAdapter);
         if (isComputingLayout(group)) {
             return;
         }
