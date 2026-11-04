@@ -1,6 +1,11 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.browse.video;
 
 import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileVideoFeed;
 import android.content.res.Configuration;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import android.widget.Toast;
@@ -54,6 +59,7 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
     private ShortsCardPresenter mShortsPresenter;
     private int mSelectedRowIndex = -1;
     private ChannelHeaderCallback mChannelHeaderCallback;
+    private MobileVideoFeed mMobileFeed;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -81,6 +87,33 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
                 }
             }
         }
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+                             Bundle savedInstanceState) {
+        View tvContent = super.onCreateView(inflater, container, savedInstanceState);
+        if (!MobileUi.isHandheld(getContext()) || tvContent == null) return tvContent;
+        FrameLayout frame = new FrameLayout(requireContext());
+        frame.addView(tvContent, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // Keep the original view attached for Leanback callbacks and pagination,
+        // but never render or accept touch in it on a phone.
+        tvContent.setVisibility(View.INVISIBLE);
+        mMobileFeed = new MobileVideoFeed(requireContext(), video -> {
+            if (mMainPresenter != null) mMainPresenter.onVideoItemClicked(video);
+        }, true);
+        mMobileFeed.setBottomInsetDp(16);
+        frame.addView(mMobileFeed.getView(), new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        mMobileFeed.scheduleRows(mRowsAdapter);
+        return frame;
+    }
+
+    @Override
+    public void onDestroyView() {
+        mMobileFeed = null;
+        super.onDestroyView();
     }
 
     protected void addHeader(ChannelHeaderCallback callback) {
@@ -127,6 +160,7 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
 
     @Override
     public void clear() {
+        if (mMobileFeed != null) mMobileFeed.scheduleRows(mRowsAdapter);
         if (mRowsAdapter != null) {
             mRowsAdapter.clear();
             if (mChannelHeaderCallback != null) {
@@ -221,6 +255,8 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
 
     @Override
     public void update(VideoGroup group) {
+        // Update after the TV-backed data adapter changes, including paging.
+        if (mMobileFeed != null) mMobileFeed.scheduleRows(mRowsAdapter);
         if (isComputingLayout(group)) {
             return;
         }
