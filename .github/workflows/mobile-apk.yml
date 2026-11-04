@@ -5,6 +5,7 @@ on:
     branches:
       - 'feature/mobile-touch-android-*'
       - 'feature/mobile-v4-native-layout-*'
+      - 'feature/mobile-v5-responsive-controls-settings-*'
   workflow_dispatch:
 
 concurrency:
@@ -60,8 +61,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v4-native-20261104 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v4 - Native Phone Layout (4 Nov 2026)" \
-            --notes "Mobile v4: full-width phone feed, responsive tablet columns, original sections as a light overlay drawer (no content shifting), touch selection, bottom tabs, search and player. Separate package com.sokytube.mobile. Debug signed. Physical device testing required." \
+          gh release create mobile-preview-v5-responsive-20261105 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v5 - Responsive Player and Settings (5 Nov 2026)" \
+            --notes "Mobile v5: fixes native player visibility and touch actions; responsive Settings category list and full-width nested settings sheet with Back/Close; adapts phone, tablet, rotation, multi-window and font scaling. Separate package com.sokytube.mobile. Debug signed. Physical device testing required." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v4-native-20261104 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v5-responsive-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
