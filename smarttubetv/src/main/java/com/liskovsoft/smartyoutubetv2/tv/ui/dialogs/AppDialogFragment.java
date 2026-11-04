@@ -133,6 +133,11 @@ public class AppDialogFragment extends LeanbackSettingsFragment implements AppDi
         mIsTransparent = stackIsEmpty ? isTransparent : mIsTransparent;
         mIsOverlay = isOverlay;
         mId = id;
+        if (getActivity() instanceof AppDialogActivity) {
+            AppDialogActivity mobileActivity = (AppDialogActivity) getActivity();
+            mobileActivity.setMobilePanelTitle(title);
+            if (getView() != null) getView().post(mobileActivity::requestMobileSettingsLayout);
+        }
 
         if (isExpandable && categories != null && categories.size() == 1) {
             OptionCategory category = categories.get(0);
@@ -236,6 +241,10 @@ public class AppDialogFragment extends LeanbackSettingsFragment implements AppDi
         }
         // Fix possible state loss!!!
         transaction.commitAllowingStateLoss();
+        if (getActivity() instanceof AppDialogActivity && getView() != null) {
+            getView().post(() ->
+                    ((AppDialogActivity) getActivity()).requestMobileSettingsLayout());
+        }
     }
 
     @Override
