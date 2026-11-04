@@ -219,6 +219,31 @@ public class PlaybackActivity extends LeanbackActivity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (MobileUi.isHandheld(this) && mPlaybackFragment != null &&
+                event.getRepeatCount() == 0) {
+            // Fallback for direct steering-wheel/Bluetooth media key delivery.
+            // Background/Android Auto commands are handled by MediaSession.
+            if (keyCode == KeyEvent.KEYCODE_MEDIA_NEXT) {
+                mPlaybackFragment.skipToNext();
+                return true;
+            } else if (keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
+                mPlaybackFragment.skipToPrevious();
+                return true;
+            } else if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
+                    keyCode == KeyEvent.KEYCODE_HEADSETPHOOK) {
+                mPlaybackFragment.setPlayWhenReady(!mPlaybackFragment.getPlayWhenReady());
+                MobilePlaybackService.refresh();
+                return true;
+            } else if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY) {
+                mPlaybackFragment.setPlayWhenReady(true);
+                MobilePlaybackService.refresh();
+                return true;
+            } else if (keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE) {
+                mPlaybackFragment.setPlayWhenReady(false);
+                MobilePlaybackService.refresh();
+                return true;
+            }
+        }
         if (keyCode == KeyEvent.KEYCODE_BUTTON_R1) {
             mPlaybackFragment.skipToNext();
             return true;
@@ -396,6 +421,8 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override
     public void onUserLeaveHint() {
         if (MobileUi.isHandheld(this)) {
+            if (isFinishing() || isBackPressed() || getViewManager().isNewViewPending()
+                    || AppDialogPresenter.instance(this).isDialogShown()) return;
             if (mMobileAudioOnly) {
                 MobilePlaybackService.start(this);
                 return;
