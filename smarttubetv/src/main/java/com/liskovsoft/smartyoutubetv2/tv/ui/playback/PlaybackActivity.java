@@ -56,9 +56,13 @@ public class PlaybackActivity extends LeanbackActivity {
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
-            // Refresh original player controls, never reinstate a second overlay.
-            mPlaybackFragment.onMobileWindowResized();
             if (mMobileWatch != null) mMobileWatch.applyLayout();
+            // Rebind only AFTER the responsive 16:9 container has measured
+            // its new dimensions, otherwise controls use the old orientation.
+            getWindow().getDecorView().post(() -> {
+                if (!isFinishing() && mPlaybackFragment != null)
+                    mPlaybackFragment.onMobileWindowResized();
+            });
         }
     }
 
