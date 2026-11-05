@@ -37,8 +37,18 @@ public class BrowseActivity extends LeanbackActivity {
         try {
             setContentView(R.layout.fragment_main);
             if (MobileUi.isHandheld(this)) {
+                // The TV theme requests immersive/edge-to-edge fullscreen.
+                // Restore Android's real status and navigation bar insets on phones;
+                // do not lay the browse toolbar beneath the camera cutout.
                 getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN |
+                        WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS |
                         WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+                if (android.os.Build.VERSION.SDK_INT >= 30) {
+                    getWindow().setDecorFitsSystemWindows(true);
+                    android.view.WindowInsetsController bars = getWindow().getInsetsController();
+                    if (bars != null) bars.show(android.view.WindowInsets.Type.statusBars() |
+                            android.view.WindowInsets.Type.navigationBars());
+                }
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
                 getWindow().setStatusBarColor(Color.WHITE);
                 getWindow().setNavigationBarColor(Color.WHITE);

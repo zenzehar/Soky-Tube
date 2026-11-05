@@ -27,6 +27,7 @@ import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.VideoGroup;
+import com.liskovsoft.smartyoutubetv2.common.app.presenters.BrowsePresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.interfaces.VideoGroupPresenter;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.tv.adapter.VideoGroupObjectAdapter;
@@ -105,6 +106,8 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
             if (mMainPresenter != null) mMainPresenter.onVideoItemClicked(video);
         }, true);
         mMobileFeed.setBottomInsetDp(16);
+        mMobileFeed.setOnRefresh(() ->
+                BrowsePresenter.instance(requireContext()).refresh(false));
         mMobileFeed.setOnVideoVisible(video -> {
             if (video == null || mVideoGroupAdapters == null || mMainPresenter == null) return;
             for (VideoGroupObjectAdapter group : mVideoGroupAdapters.values()) {

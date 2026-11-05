@@ -157,8 +157,9 @@ final class MobileWatchPage {
         commentsCard.setContentDescription("Open video comments");
         commentsCard.setOnClickListener(v -> player.openMobileComments());
 
-        // True YouTube chapter partitions are selectable from the watch page.
-        // Hide the entire row for videos without authored chapters.
+        // Chapters live in the player settings/seek timeline; the watch content
+        // below the video prioritises RELATED VIDEOS rather than sub-sections.
+        // Keep the section container for the chapter model but do not display it.
         chapterSection = new LinearLayout(activity);
         chapterSection.setOrientation(LinearLayout.VERTICAL);
         chapterSection.setVisibility(View.GONE);
@@ -189,6 +190,7 @@ final class MobileWatchPage {
 
         feed = new MobileVideoFeed(activity, player::openMobileSuggestion, false);
         feed.setOnVideoVisible(player::onMobileSuggestionVisible);
+        feed.setOnRefresh(player::refreshMobileSuggestions);
         description.addView(feed.getView(), new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
@@ -243,6 +245,7 @@ final class MobileWatchPage {
         if (wasShort != isShortVideo) videoFrame.post(this::applyLayout);
         // Reinitialise storyboard thumbnails and chapter titles for new video.
         touchControls.onVideoChanged(video);
+        feed.setExcludedVideoId(video.videoId);
         touchControls.setVisible(true);
     }
     void setChapters(java.util.List<Video> chapters) {
@@ -252,7 +255,7 @@ final class MobileWatchPage {
             chapterSection.setVisibility(View.GONE);
             return;
         }
-        chapterSection.setVisibility(View.VISIBLE);
+        chapterSection.setVisibility(View.GONE);
         for (Video chapter : chapters) {
             if (chapter == null || chapter.startTimeMs < 0) continue;
             String name = chapter.getTitleFull() != null ?
@@ -289,6 +292,7 @@ final class MobileWatchPage {
     void setPipMode(boolean pip) {
         inPip = pip;
         touchControls.setVisible(false);
+        touchControls.resetPipTransform();
         applyLayout();
     }
 
@@ -313,6 +317,19 @@ final class MobileWatchPage {
                     View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
                     View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         } else {
+            // Unlike a TV, the phone watch page must fit around system bars
+            // and camera cutouts. Never draw its touch targets under status UI.
+            activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN |
+                    WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS |
+                    WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                activity.getWindow().setDecorFitsSystemWindows(true);
+                android.view.WindowInsetsController controller =
+                        activity.getWindow().getInsetsController();
+                if (controller != null) controller.show(
+                        android.view.WindowInsets.Type.statusBars() |
+                        android.view.WindowInsets.Type.navigationBars());
+            }
             int width = screen.getWidth() > 0 ? screen.getWidth()
                     : activity.getResources().getDisplayMetrics().widthPixels;
             // Shorts are portrait videos: give them a tall portrait player,

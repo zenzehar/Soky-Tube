@@ -41,13 +41,14 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     public static final String ACTION_NEXT = "com.sokytube.mobile.MEDIA_NEXT";
     public static final String ACTION_PREVIOUS = "com.sokytube.mobile.MEDIA_PREVIOUS";
     public static final String ACTION_STOP = "com.sokytube.mobile.MEDIA_STOP";
-    private static final String CHANNEL_ID = "sokytube_mobile_media";
+    private static final String CHANNEL_ID = "sokytube_mobile_media_controls_v2";
     private static final int NOTIFICATION_ID = 2037;
 
     private static MediaSessionCompat sharedSession;
     private static MobilePlaybackService activeService;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean foreground;
+    private Boolean requestedPlaying;
 
     /** The session is created before the service and attached to the SAME
      * MediaSessionConnector instance owned by the existing player. */
@@ -88,6 +89,14 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
         if (activeService != null) activeService.refreshNotification();
     }
 
+    /** Explicitly end the floating player's notification and media service
+     * after Android removes its PiP window. This is NOT used for background audio.
+     */
+    public static void stop(Context context) {
+        if (activeService != null) activeService.stopForegroundAndSelf();
+        else context.stopService(new Intent(context, MobilePlaybackService.class));
+    }
+
     private static PendingIntent actionIntent(Context context, String action, int request) {
         return PendingIntent.getService(context, request,
                 new Intent(context, MobilePlaybackService.class).setAction(action),
@@ -101,6 +110,7 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
             NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Soky Tube playback",
                     NotificationManager.IMPORTANCE_LOW);
             channel.setDescription("Audio and background player controls");
+            channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) manager.createNotificationChannel(channel);
         }
@@ -153,15 +163,28 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
             String action = intent.getAction();
             if (ACTION_NEXT.equals(action)) controls.skipToNext();
             else if (ACTION_PREVIOUS.equals(action)) controls.skipToPrevious();
-            else if (ACTION_PAUSE.equals(action)) controls.pause();
-            else if (ACTION_PLAY.equals(action)) controls.play();
-            else if (ACTION_STOP.equals(action)) {
+            else if (ACTION_PAUSE.equals(action)) {
+                requestedPlaying = false;
+                controls.pause();
+            } else if (ACTION_PLAY.equals(action)) {
+                requestedPlaying = true;
+                controls.play();
+            } else if (ACTION_STOP.equals(action)) {
                 controls.pause();
                 stopForegroundAndSelf();
                 return START_NOT_STICKY;
             }
         }
         refreshNotification();
+        if (requestedPlaying != null) {
+            // MediaSessionConnector publishes its new state asynchronously.
+            // Update the icon on the SAME tap, then reconcile with the engine.
+            handler.removeCallbacksAndMessages(null);
+            handler.postDelayed(() -> {
+                requestedPlaying = null;
+                refreshNotification();
+            }, 450);
+        }
         return START_NOT_STICKY;
     }
 
@@ -170,7 +193,8 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
         MediaControllerCompat controller = mediaSession.getController();
         MediaMetadataCompat metadata = controller.getMetadata();
         PlaybackStateCompat state = controller.getPlaybackState();
-        boolean playing = state != null && (state.getState() == PlaybackStateCompat.STATE_PLAYING
+        boolean playing = requestedPlaying != null ? requestedPlaying :
+                state != null && (state.getState() == PlaybackStateCompat.STATE_PLAYING
                 || state.getState() == PlaybackStateCompat.STATE_BUFFERING);
         String title = metadata != null ? metadata.getString(MediaMetadataCompat.METADATA_KEY_TITLE) : null;
         String artist = metadata != null ? metadata.getString(MediaMetadataCompat.METADATA_KEY_ARTIST) : null;
@@ -184,6 +208,7 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
                 .setContentText(artist == null ? "Playing audio" : artist)
                 .setContentIntent(openPlayer)
                 .setOnlyAlertOnce(true)
+                .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
                 .setOngoing(playing)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setPriority(NotificationCompat.PRIORITY_LOW)

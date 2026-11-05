@@ -162,8 +162,8 @@ android {
         stmobile {
             // Independent install: never overwrites an existing SmartTube TV installation.
             applicationId "com.sokytube.mobile"
-            versionCode 2461
-            versionName "32.71-soky-v7.3-null-duration-fix"
+            versionCode 2462
+            versionName "32.72-soky-v7.4-mobile-ux"
             targetSdkVersion project.properties.compileSdkVersion
             matchingFallbacks = ["stbeta"]
         }
@@ -196,6 +196,7 @@ dependencies {
     implementation 'androidx.recommendation:recommendation:' + leanbackXVersion
     implementation 'androidx.annotation:annotation:' + annotationXVersion
     implementation 'androidx.recyclerview:recyclerview:' + recyclerviewXVersion // exoplayer 2.12.1 fix
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0' // phone spring pull-to-refresh
     implementation 'androidx.media:media:' + mediaXVersion // exoplayer fix
     implementation 'androidx.constraintlayout:constraintlayout:' + constraintLayoutXVersion
 
