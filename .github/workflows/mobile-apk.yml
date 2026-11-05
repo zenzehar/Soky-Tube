@@ -43,6 +43,9 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileUiSizingTest"
+      - name: Test null-video duration regression
+        run: |
+          ./gradlew --no-daemon --stacktrace :common:testStbetaDebugUnitTest --tests "*ExoPlayerControllerDurationTest"
       - name: Build installable debug-signed mobile APK
         run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
@@ -63,8 +66,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-2-crash-recovery-20261105 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.2 - Playback Crash Recovery Diagnostic (5 Nov 2026)" \
-            --notes "Diagnostic v7.2 built on v7.1: defer foreground media-service startup until explicit background/PiP; fix media-session ownership when Android stops the service; store fatal Java stack traces locally and show copyable last-crash dialog after relaunch; disable automatic app-data restoration only for the stmobile flavor. Hardware playback verification required. Foreground notification launch is intentionally deferred during isolation; do not merge to master." \
+          gh release create mobile-preview-v7-3-null-duration-20261105 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.3 - Fix Null Video Duration Crash (5 Nov 2026)" \
+            --notes "v7.3 fixes the user-confirmed NullPointerException during video opening: getLiveDurationMs no longer dereferences an unbound Video and chapter marker duration waits for playback initialization. Preserves v7.2 crash reporting and separate mobile flavor. Regression tests and CI must pass. Device verification outstanding; do not merge into master until confirmed." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-2-crash-recovery-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-3-null-duration-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
