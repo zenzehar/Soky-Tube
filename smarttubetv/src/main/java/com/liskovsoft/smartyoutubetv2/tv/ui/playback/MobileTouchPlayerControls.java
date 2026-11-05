@@ -5,6 +5,7 @@ import android.graphics.Point;
 import android.graphics.Rect;
 import android.os.Build;
 import android.view.WindowInsets;
+import android.view.VelocityTracker;
 import android.app.Dialog;
 import android.graphics.drawable.ColorDrawable;
 import android.text.TextUtils;
@@ -151,69 +152,103 @@ final class MobileTouchPlayerControls {
             }
         });
         root.setOnTouchListener(new View.OnTouchListener() {
-            float downY, downX;
+            float downY, downX, pivotX, pivotY;
             float targetDx, targetDy, targetScale;
-            @Override public boolean onTouch(View v, MotionEvent event) {
+            VelocityTracker velocity;
+            private void addScreenMovement(MotionEvent event) {
+                if (velocity == null) return;
+                // Coordinates must stay stable while the VIDEO VIEW is moving.
+                MotionEvent screen = MotionEvent.obtain(event);
+                screen.offsetLocation(event.getRawX() - event.getX(),
+                        event.getRawY() - event.getY());
+                velocity.addMovement(screen);
+                screen.recycle();
+            }
+            private void clearVelocity() {
+                if (velocity != null) {
+                    velocity.recycle();
+                    velocity = null;
+                }
+            }
+            @Override public boolean onTouch(View view, MotionEvent event) {
                 int action = event.getActionMasked();
                 if (action == MotionEvent.ACTION_DOWN) {
+                    clearVelocity();
+                    velocity = VelocityTracker.obtain();
+                    addScreenMovement(event);
                     downY = event.getRawY();
                     downX = event.getRawX();
                     draggingToPip = false;
                     videoContainer.animate().cancel();
-                    // The next drag always begins with the full-size source
-                    // video, never a partially restored/stale transform.
                     videoContainer.setTranslationX(0f);
                     videoContainer.setTranslationY(0f);
                     videoContainer.setScaleX(1f);
                     videoContainer.setScaleY(1f);
+                    // Keep the exact point under the finger while shrinking.
+                    pivotX = Math.max(0f, Math.min(videoContainer.getWidth(), event.getX()));
+                    pivotY = Math.max(0f, Math.min(videoContainer.getHeight(), event.getY()));
+                    videoContainer.setPivotX(pivotX);
+                    videoContainer.setPivotY(pivotY);
                     float[] goal = bottomRightPipDestination();
-                    targetDx = goal[0];
-                    targetDy = goal[1];
                     targetScale = goal[2];
+                    // Original destination assumes a centre pivot; correct for
+                    // the finger pivot so the finished mini window still lands
+                    // at the bottom-right of the ENTIRE phone display.
+                    targetDx = goal[0] - (1f - targetScale) *
+                            (pivotX - videoContainer.getWidth() / 2f);
+                    targetDy = goal[1] - (1f - targetScale) *
+                            (pivotY - videoContainer.getHeight() / 2f);
                     return gestures.onTouchEvent(event);
                 }
-                // Raw screen coordinates do not move with the shrinking video;
-                // local event.getY() does, causing jumps mid-gesture.
-                float dy = Math.max(0f, event.getRawY() - downY);
-                float dx = Math.abs(event.getRawX() - downX);
+                addScreenMovement(event);
+                float dragY = Math.max(0f, event.getRawY() - downY);
+                float dragX = event.getRawX() - downX;
                 if (action == MotionEvent.ACTION_MOVE) {
-                    if (!draggingToPip && dy > dp(14) && dy > dx * 1.4f) {
+                    if (!draggingToPip && dragY > dp(12) &&
+                            dragY > Math.abs(dragX) * 1.25f) {
                         draggingToPip = true;
                         liftVideoAboveWatchPage();
                     }
                     if (draggingToPip) {
-                        // Travel diagonally to the actual bottom-right target,
-                        // with a smaller thumbnail and a stable finger gesture.
-                        float progress = Math.min(.94f,
-                                dy / Math.max(dp(210), root.getHeight() * .80f));
-                        videoContainer.setPivotX(videoContainer.getWidth() / 2f);
-                        videoContainer.setPivotY(videoContainer.getHeight() / 2f);
-                        videoContainer.setTranslationX(targetDx * progress);
-                        videoContainer.setTranslationY(targetDy * progress);
-                        float scale = 1f - (1f - targetScale) * progress;
-                        videoContainer.setScaleX(scale);
-                        videoContainer.setScaleY(scale);
+                        // The video moves WITH the finger. A slow drag never
+                        // launches until finger-up; a fast downward flick uses
+                        // the release velocity to settle toward native PiP.
+                        float[] move = MobilePipDragMath.follow(
+                                dragY, dragX, targetDx, targetDy, targetScale,
+                                activity.getResources().getDisplayMetrics().density);
+                        videoContainer.setTranslationX(move[0]);
+                        videoContainer.setTranslationY(move[1]);
+                        videoContainer.setScaleX(move[2]);
+                        videoContainer.setScaleY(move[2]);
                         return true;
                     }
                 }
-                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-                    if (draggingToPip) {
-                        boolean complete = action == MotionEvent.ACTION_UP &&
-                                dy > dp(72) && dy > dx * 1.4f;
-                        draggingToPip = false;
+                if (action == MotionEvent.ACTION_UP ||
+                        action == MotionEvent.ACTION_CANCEL) {
+                    float speedY = 0f;
+                    if (velocity != null) {
+                        velocity.computeCurrentVelocity(1000);
+                        speedY = velocity.getYVelocity();
+                    }
+                    clearVelocity();
+                    float density = activity.getResources().getDisplayMetrics().density;
+                    boolean complete = action == MotionEvent.ACTION_UP &&
+                            MobilePipDragMath.shouldMinimize(dragY, speedY, density);
+                    boolean captured = draggingToPip;
+                    if (!captured && complete) {
+                        captured = true;
+                        liftVideoAboveWatchPage();
+                    }
+                    draggingToPip = false;
+                    if (captured) {
                         if (complete) {
-                            // Physical shrinking animation bridges into platform PiP,
-                            // which then takes over the system-level floating window.
                             videoContainer.animate().translationX(targetDx)
                                     .translationY(targetDy)
                                     .scaleX(targetScale).scaleY(targetScale)
-                                    .setDuration(210)
+                                    .setDuration(MobilePipDragMath.settleDurationMs(
+                                            speedY, density))
                                     .withEndAction(() -> {
                                         activity.enterMobilePip(true);
-                                        // The Android PiP transition consumes the
-                                        // morphed rectangle as its source. Do not
-                                        // animate BACK to the large video while the
-                                        // system is shrinking it to the PiP window.
                                         root.postDelayed(() -> {
                                             if (!activity.isInPipMode())
                                                 resetPipTransform();
@@ -394,6 +429,8 @@ final class MobileTouchPlayerControls {
         videoContainer.setScaleX(1f);
         videoContainer.setScaleY(1f);
         videoContainer.setElevation(0f);
+        videoContainer.setPivotX(videoContainer.getWidth() / 2f);
+        videoContainer.setPivotY(videoContainer.getHeight() / 2f);
     }
 
     void resetPipTransform() {
@@ -402,7 +439,11 @@ final class MobileTouchPlayerControls {
                 .scaleX(1f).scaleY(1f)
                 .setDuration(260)
                 .setInterpolator(new OvershootInterpolator(.65f))
-                .withEndAction(() -> videoContainer.setElevation(0f))
+                .withEndAction(() -> {
+                    videoContainer.setElevation(0f);
+                    videoContainer.setPivotX(videoContainer.getWidth() / 2f);
+                    videoContainer.setPivotY(videoContainer.getHeight() / 2f);
+                })
                 .start();
     }
 
