@@ -153,12 +153,21 @@ public class ExoPlayerController implements Player.EventListener, LiveStateProvi
     @Override
     public long getLiveDurationMs() {
         long liveEdgeMs = mSabrLiveManifest != null ? mSabrLiveManifest.getLiveEdgeMs() : -1;
-        // Skip the fallback duration because SABR uses absolute values for clipped streams
-        if (mSabrLiveManifest != null && !getVideo().isFullLive()) {
+        // Mobile chapter controls can ask for duration during initialization,
+        // before the selected Video has been assigned.
+        return resolveLiveDurationMs(getVideo(), liveEdgeMs, mSabrLiveManifest != null);
+    }
+
+    static long resolveLiveDurationMs(Video video, long liveEdgeMs, boolean hasSabrManifest) {
+        if (video == null) {
+            // No selected Video yet: use a known live edge or report unknown.
             return liveEdgeMs;
         }
-        // NOTE: liveEdgeMs could be -1 during initial video loading. Use fallback duration.
-        return liveEdgeMs != -1 ? liveEdgeMs : getVideo().getLiveDurationMs();
+        // Keep original SABR logic for clipped (non-full-live) streams.
+        if (hasSabrManifest && !video.isFullLive()) {
+            return liveEdgeMs;
+        }
+        return liveEdgeMs != -1 ? liveEdgeMs : video.getLiveDurationMs();
     }
 
     @Override
@@ -214,7 +223,8 @@ public class ExoPlayerController implements Player.EventListener, LiveStateProvi
     }
 
     public long getDurationMs() {
-        if (mPlayer == null) {
+        // ExoPlayer can be initialized before the first Video is bound.
+        if (mPlayer == null || getVideo() == null) {
             return -1;
         }
 

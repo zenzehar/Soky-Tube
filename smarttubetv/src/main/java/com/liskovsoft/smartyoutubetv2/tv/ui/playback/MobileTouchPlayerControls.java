@@ -536,7 +536,9 @@ final class MobileTouchPlayerControls {
         chapterVideos.clear();
         if (chapters != null) chapterVideos.addAll(chapters);
         chapterMarkerDuration = -1;
-        sponsorMarkers.updateChapters(chapterVideos,Math.max(0L,player.getDurationMs()));
+        // Chapters may arrive before ExoPlayerController.setVideo(). Defer
+        // timeline measurements until refresh() obtains a valid duration.
+        sponsorMarkers.updateChapters(chapterVideos, 0L);
         if (scrubPreviews != null) scrubPreviews.setChapters(chapterVideos);
     }
 
