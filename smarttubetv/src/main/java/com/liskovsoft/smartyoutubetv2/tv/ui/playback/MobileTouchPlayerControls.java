@@ -185,7 +185,7 @@ final class MobileTouchPlayerControls {
                                     .setDuration(165)
                                     .withEndAction(() -> {
                                         activity.enterMobilePip(true);
-                                        root.postDelayed(this::resetPipTransform, 220);
+                                        root.postDelayed(MobileTouchPlayerControls.this::resetPipTransform, 220);
                                     }).start();
                         } else {
                             resetPipTransform();
