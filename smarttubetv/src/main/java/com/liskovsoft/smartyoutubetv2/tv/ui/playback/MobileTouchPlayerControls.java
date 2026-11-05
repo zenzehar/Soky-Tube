@@ -47,6 +47,7 @@ final class MobileTouchPlayerControls {
     private final PlaybackActivity activity;
     private PlaybackFragment player;
     private final FrameLayout root;
+    private final FrameLayout videoContainer;
     private final LinearLayout top;
     private final LinearLayout center;
     private final LinearLayout bottom;
@@ -121,6 +122,7 @@ final class MobileTouchPlayerControls {
     MobileTouchPlayerControls(PlaybackActivity activity, PlaybackFragment fragment, FrameLayout container) {
         this.activity = activity;
         this.player = fragment;
+        this.videoContainer = container;
         root = new FrameLayout(activity);
         root.setClickable(true);
         root.setFocusable(false);
@@ -152,7 +154,7 @@ final class MobileTouchPlayerControls {
                     downY = event.getY();
                     downX = event.getX();
                     draggingToPip = false;
-                    root.animate().cancel();
+                    videoContainer.animate().cancel();
                     return gestures.onTouchEvent(event);
                 }
                 float dy = Math.max(0f, event.getY() - downY);
@@ -163,11 +165,11 @@ final class MobileTouchPlayerControls {
                     if (draggingToPip) {
                         // Follow the finger, reducing the video toward its PiP size.
                         float progress = Math.min(1f, dy / Math.max(dp(130), root.getHeight()));
-                        root.setPivotX(root.getWidth() / 2f);
-                        root.setPivotY(0f);
-                        root.setTranslationY(dp(42) * progress);
-                        root.setScaleX(1f - .22f * progress);
-                        root.setScaleY(1f - .22f * progress);
+                        videoContainer.setPivotX(videoContainer.getWidth() / 2f);
+                        videoContainer.setPivotY(0f);
+                        videoContainer.setTranslationY(dp(42) * progress);
+                        videoContainer.setScaleX(1f - .22f * progress);
+                        videoContainer.setScaleY(1f - .22f * progress);
                         return true;
                     }
                 }
@@ -179,7 +181,7 @@ final class MobileTouchPlayerControls {
                         if (complete) {
                             // Physical shrinking animation bridges into platform PiP,
                             // which then takes over the system-level floating window.
-                            root.animate().translationY(dp(65)).scaleX(.76f).scaleY(.76f)
+                            videoContainer.animate().translationY(dp(65)).scaleX(.76f).scaleY(.76f)
                                     .setDuration(165)
                                     .withEndAction(() -> {
                                         activity.enterMobilePip(true);
@@ -311,8 +313,8 @@ final class MobileTouchPlayerControls {
     }
 
     void resetPipTransform() {
-        root.animate().cancel();
-        root.animate().translationY(0f).scaleX(1f).scaleY(1f)
+        videoContainer.animate().cancel();
+        videoContainer.animate().translationY(0f).scaleX(1f).scaleY(1f)
                 .setDuration(260).setInterpolator(new OvershootInterpolator(.65f)).start();
     }
 
