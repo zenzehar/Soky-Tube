@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.content.res.Configuration;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileSystemBars;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -54,6 +55,7 @@ public class PlaybackActivity extends LeanbackActivity {
         boolean mobile = MobileUi.isHandheld(this);
         if (mobile) com.liskovsoft.smartyoutubetv2.tv.ui.main.MainApplication.setMobilePlaybackPhase("creating playback screen");
         setContentView(mobile ? R.layout.fragment_playback_mobile : R.layout.fragment_playback);
+        if (mobile) MobileSystemBars.install(this, false);
         Fragment fragment =
                 getSupportFragmentManager().findFragmentByTag(getString(R.string.playback_tag));
         if (fragment instanceof PlaybackFragment) {
@@ -63,10 +65,19 @@ public class PlaybackActivity extends LeanbackActivity {
         if (mobile) com.liskovsoft.smartyoutubetv2.tv.ui.main.MainApplication.setMobilePlaybackPhase("playback screen attached");
     }
 
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && MobileUi.isHandheld(this) && !isInPipMode() &&
+                getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE)
+            MobileSystemBars.ensure(this, false);
+    }
+
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
+            if (newConfig.orientation != Configuration.ORIENTATION_LANDSCAPE && !isInPipMode())
+                MobileSystemBars.ensure(this, false);
             if (mMobileWatch != null) mMobileWatch.applyLayout();
             // Rebind only AFTER the responsive 16:9 container has measured
             // its new dimensions, otherwise controls use the old orientation.
@@ -229,6 +240,9 @@ public class PlaybackActivity extends LeanbackActivity {
 
     @Override protected void onResume() {
         super.onResume();
+        if (MobileUi.isHandheld(this) && !isInPipMode() &&
+                getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE)
+            MobileSystemBars.ensure(this, false);
         if (mMobileWatch != null) mMobileWatch.resume();
         if (MobileUi.isHandheld(this)) {
             mMobileAudioOnly = false;
@@ -277,6 +291,8 @@ public class PlaybackActivity extends LeanbackActivity {
         if (playerThemeResId > 0) {
             setTheme(playerThemeResId);
         }
+        if (MobileUi.isHandheld(this))
+            getTheme().applyStyle(R.style.SokyMobileSafeAreaOverlay, true);
     }
 
     @Override

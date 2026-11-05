@@ -20,6 +20,7 @@ import androidx.leanback.widget.ObjectAdapter;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileSystemBars;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileVideoFeed;
 
 /**
@@ -323,19 +324,9 @@ final class MobileWatchPage {
                     View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
                     View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         } else {
-            // Unlike a TV, the phone watch page must fit around system bars
-            // and camera cutouts. Never draw its touch targets under status UI.
-            activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN |
-                    WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS |
-                    WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
-            if (android.os.Build.VERSION.SDK_INT >= 30) {
-                activity.getWindow().setDecorFitsSystemWindows(true);
-                android.view.WindowInsetsController controller =
-                        activity.getWindow().getInsetsController();
-                if (controller != null) controller.show(
-                        android.view.WindowInsets.Type.statusBars() |
-                        android.view.WindowInsets.Type.navigationBars());
-            }
+            // Phone window policy accounts for the physical status/camera
+            // cutout; the player starts BELOW the OS bar, not behind it.
+            MobileSystemBars.ensure(activity, false);
             int width = screen.getWidth() > 0 ? screen.getWidth()
                     : activity.getResources().getDisplayMetrics().widthPixels;
             // Shorts are portrait videos: give them a tall portrait player,
@@ -348,12 +339,7 @@ final class MobileWatchPage {
                     width / density, availableHeight / density, isShortVideo) * density);
             params.weight = 0;
             below.setVisibility(View.VISIBLE);
-            activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN |
-                    WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
-            activity.getWindow().setStatusBarColor(Color.BLACK);
-            activity.getWindow().setNavigationBarColor(Color.WHITE);
-            activity.getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+            // No legacy TV-style fullscreen flags are reapplied in portrait.
         }
         videoFrame.setLayoutParams(params);
     }

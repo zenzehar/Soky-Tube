@@ -8,6 +8,16 @@
     <attr name="cardProgressStyle" format="reference"/>
     <attr name="appLogo" format="reference"/>
 
+    <!-- Handheld-only runtime overlay: cancel inherited Android TV fullscreen
+         before any phone views are measured. Does not affect TV mode. -->
+    <style name="SokyMobileSafeAreaOverlay">
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowTranslucentNavigation">false</item>
+        <item name="android:windowOverscan">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+
     <!-- Increase spacing between items in GridView -->
     <style name="GridViewStyle" parent="Widget.Leanback.GridItems.VerticalGridView">
         <item name="android:horizontalSpacing">@dimen/grid_item_horizontal_spacing</item>

@@ -11,6 +11,7 @@ on:
       - 'feature/mobile-v7-4-*'
       - 'fix/mobile-v7-5-*'
       - 'fix/mobile-v7-6-*'
+      - 'fix/mobile-v7-7-*'
   workflow_dispatch:
 
 concurrency:
@@ -55,6 +56,9 @@ jobs:
       - name: Test full-screen PiP morph geometry
         run: |
           ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobilePipMorphGeometryTest"
+      - name: Test finger drag, flick and phone safe areas
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobilePipDragMathTest" --tests "*MobileSystemBarsTest"
       - name: Build installable debug-signed mobile APK
         run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
@@ -75,8 +79,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-6-fullscreen-pip-morph-20261105 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.6 - Full-Screen Bottom-Right PiP Morph (5 Nov 2026)" \
-            --notes "v7.6: morph the ACTUAL big video toward bottom-right of the entire physical phone display, not the original video window; account for navigation-bar insets; lift the scaled player above the related-video panel and disable ancestor clipping; pass the transformed screen-space bounds to Android as the PiP source; avoid a competing reverse animation after Android takes over. Retains v7.5 browse and close-to-stop behaviours. Handheld-only, physical device verification required." \
+          gh release create mobile-preview-v7-7-finger-tracked-safe-area-20261105 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.7 - Finger-Tracked PiP and Safe Status Bars (5 Nov 2026)" \
+            --notes "v7.7: YouTube-like direct finger tracking for video minimisation, accurate touch pivot, deliberate drag threshold and fast downward fling exception; safe status-bar/camera-cutout/navigation-bar layout in Home and portrait player, including older OEM edge-to-edge behaviour; no inherited TV fullscreen theme for handheld. Preserves v7.6 full-device bottom-right PiP morph and v7.5 background stop. Hardware playback and gesture verification pending; TV mode unchanged." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-6-fullscreen-pip-morph-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-7-finger-tracked-safe-area-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
