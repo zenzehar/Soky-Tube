@@ -44,6 +44,9 @@ public class PlaybackActivity extends LeanbackActivity {
     private MobileWatchPage mMobileWatch;
     private boolean mMobileAudioOnly;
     private boolean mMobilePipTransition;
+    private boolean mMobilePipSessionActive;
+    private boolean mOpenBrowseAfterPip;
+    private boolean mBrowseLaunchedForPip;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -105,6 +108,8 @@ public class PlaybackActivity extends LeanbackActivity {
         if (!MobileUi.isHandheld(this) || mPlaybackFragment == null) return;
         mMobileAudioOnly = true;
         mMobilePipTransition = false;
+        mMobilePipSessionActive = false;
+        mOpenBrowseAfterPip = false;
         mPlaybackFragment.keepMobilePlaybackInBackground(true);
         MobilePlaybackService.start(this);
         // The foreground session owns media notification / steering buttons.
@@ -120,29 +125,70 @@ public class PlaybackActivity extends LeanbackActivity {
         if (isInPipMode()) return;
         mMobileAudioOnly = false;
         mMobilePipTransition = true;
+        mOpenBrowseAfterPip = browse;
+        mBrowseLaunchedForPip = false;
         mPlaybackFragment.keepMobilePlaybackInBackground(true);
         MobilePlaybackService.start(this);
         try {
             updateMobilePipParams();
-            if (enterPictureInPictureMode(new PictureInPictureParams.Builder()
+            PictureInPictureParams.Builder params = new PictureInPictureParams.Builder()
                     .setAspectRatio(new Rational(isMobileShorts() ? 9 : 16,
-                            isMobileShorts() ? 16 : 9)).build())) {
-                if (browse) {
-                    // PiP remains visible while the Browse activity comes to the
-                    // foreground. Do not instantiate or attach a second player.
-                    getWindow().getDecorView().postDelayed(() -> {
-                        if (!isFinishing() && isInPipMode()) {
-                            Intent intent = new Intent(this,
-                              com.liskovsoft.smartyoutubetv2.tv.ui.browse.BrowseActivity.class);
-                            startActivity(intent);
-                        }
-                    }, 180);
-                }
+                            isMobileShorts() ? 16 : 9));
+            View viewport = findViewById(R.id.mobile_player_frame);
+            if (viewport != null) {
+                Rect source = new Rect();
+                if (viewport.getGlobalVisibleRect(source) && !source.isEmpty())
+                    params.setSourceRectHint(source);
+            }
+            if (Build.VERSION.SDK_INT >= 31) params.setSeamlessResizeEnabled(true);
+            boolean entered = enterPictureInPictureMode(params.build());
+            if (entered) {
+                mMobilePipSessionActive = true;
+                // Do not assume Android completes the transition in 180 ms.
+                // The lifecycle callback will open Browse when PiP is visible.
+                // This fallback handles OEMs that delay/omit that callback.
+                if (browse) getWindow().getDecorView().postDelayed(
+                        this::launchBrowseOncePipIsVisible, 650);
+            } else {
+                mMobilePipTransition = false;
+                mOpenBrowseAfterPip = false;
+                mPlaybackFragment.keepMobilePlaybackInBackground(false);
+                MobilePlaybackService.stop(this);
             }
         } catch (IllegalStateException | IllegalArgumentException e) {
             Log.e(TAG, "Mobile PiP unavailable: " + e.getMessage());
             mMobilePipTransition = false;
+            mOpenBrowseAfterPip = false;
+            mPlaybackFragment.keepMobilePlaybackInBackground(false);
+            MobilePlaybackService.stop(this);
         }
+    }
+
+    private void launchBrowseOncePipIsVisible() {
+        if (!mOpenBrowseAfterPip || mBrowseLaunchedForPip ||
+                isFinishing() || !isInPipMode()) return;
+        mBrowseLaunchedForPip = true;
+        mOpenBrowseAfterPip = false;
+        // Bring the EXISTING browsing task to the front without replacing the
+        // one video decoder playing in PiP. Browse remains fully interactive.
+        Intent intent = new Intent(this,
+                com.liskovsoft.smartyoutubetv2.tv.ui.browse.BrowseActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT |
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+    }
+
+    private void stopClosedMobilePip() {
+        if (mMobileAudioOnly || mPlaybackFragment == null) return;
+        mMobilePipSessionActive = false;
+        mMobilePipTransition = false;
+        mOpenBrowseAfterPip = false;
+        mPlaybackFragment.setPlayWhenReady(false);
+        mPlaybackFragment.keepMobilePlaybackInBackground(false);
+        // The original TV background block otherwise prevents engine release.
+        mPlaybackFragment.blockEngine(false);
+        mPlaybackFragment.maybeReleasePlayer();
+        MobilePlaybackService.stop(this);
     }
 
     private boolean isMobileShorts() {
@@ -177,6 +223,12 @@ public class PlaybackActivity extends LeanbackActivity {
         if (mMobileWatch != null) mMobileWatch.resume();
         if (MobileUi.isHandheld(this)) {
             mMobileAudioOnly = false;
+            // Expanded PiP returns to a resumed full-screen player. A dismissed
+            // PiP does not resume the Activity; onStop instead stops the engine.
+            if (!isInPipMode()) {
+                mMobilePipSessionActive = false;
+                mMobilePipTransition = false;
+            }
             updateMobilePipParams();
         }
         // Only the compact mobile touch player is shown in the video area.
@@ -185,12 +237,14 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override protected void onStop() {
         if (mMobileWatch != null) mMobileWatch.stop();
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
-            if (isFinishing() && !mMobileAudioOnly) {
-                // Swiping away/closing PiP is an EXIT, not a request to keep
-                // an invisible video playing forever in the background.
-                mPlaybackFragment.setPlayWhenReady(false);
-                mPlaybackFragment.keepMobilePlaybackInBackground(false);
-                MobilePlaybackService.stop(this);
+            // Android is not required to mark an Activity as 'finishing'
+            // before a user dismisses the system PiP window with X/swipe.
+            // A PiP that remains visible is PAUSED, not STOPPED. A PiP that
+            // disappears invokes STOP; explicit background-audio mode is exempt.
+            if (MobilePipLifecyclePolicy.shouldStopOnStop(
+                    mMobilePipSessionActive, mMobileAudioOnly,
+                    mMobilePipTransition, isChangingConfigurations(), isFinishing())) {
+                stopClosedMobilePip();
             } else if (mPlaybackFragment.getPlayWhenReady()) {
                 mPlaybackFragment.keepMobilePlaybackInBackground(true);
             }
@@ -199,12 +253,9 @@ public class PlaybackActivity extends LeanbackActivity {
     }
     @Override
     protected void onDestroy() {
-        if (MobileUi.isHandheld(this) && !mMobileAudioOnly && mPlaybackFragment != null) {
-            // PiP close can destroy the Activity without first invoking
-            // onPictureInPictureModeChanged(false). Always stop owned playback.
-            mPlaybackFragment.setPlayWhenReady(false);
-            mPlaybackFragment.keepMobilePlaybackInBackground(false);
-            MobilePlaybackService.stop(this);
+        if (MobileUi.isHandheld(this) && !isChangingConfigurations() &&
+                !mMobileAudioOnly && mPlaybackFragment != null) {
+            stopClosedMobilePip();
         }
         if (mMobileWatch != null) mMobileWatch.release();
         mMobileWatch = null;
@@ -351,9 +402,7 @@ public class PlaybackActivity extends LeanbackActivity {
             // blocks destruction. On a phone the X on a floating window
             // instead means STOP: no invisible playback or stale notification.
             if (!mMobileAudioOnly && mPlaybackFragment != null) {
-                mPlaybackFragment.setPlayWhenReady(false);
-                mPlaybackFragment.keepMobilePlaybackInBackground(false);
-                MobilePlaybackService.stop(this);
+                stopClosedMobilePip();
             }
             super.finishReally();
             return;
@@ -452,7 +501,19 @@ public class PlaybackActivity extends LeanbackActivity {
             mMobileWatch.setPipMode(isInPictureInPictureMode);
             mMobileWatch.setControlsShown(!isInPictureInPictureMode);
         }
-        if (!isInPictureInPictureMode) mMobilePipTransition = false;
+        if (MobileUi.isHandheld(this)) {
+            if (isInPictureInPictureMode) {
+                mMobilePipSessionActive = true;
+                mMobilePipTransition = false;
+                // The platform reports PiP only once it is actually active:
+                // reopen Home here, not on a fixed 180 ms assumption.
+                getWindow().getDecorView().post(this::launchBrowseOncePipIsVisible);
+            } else {
+                // Preserve mMobilePipSessionActive until onResume (expand) or
+                // onStop (dismiss): both paths can report PiP=false.
+                mMobilePipTransition = false;
+            }
+        }
     }
 
     /**
@@ -461,7 +522,8 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override
     public void onUserLeaveHint() {
         if (MobileUi.isHandheld(this)) {
-            if (isFinishing() || isBackPressed() || getViewManager().isNewViewPending()
+            if (isFinishing() || isBackPressed() || mMobilePipTransition ||
+                    isInPipMode() || getViewManager().isNewViewPending()
                     || AppDialogPresenter.instance(this).isDialogShown()) return;
             if (mMobileAudioOnly) {
                 MobilePlaybackService.start(this);

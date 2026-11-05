@@ -48,6 +48,11 @@ final class MobileWatchPage {
         below = activity.findViewById(R.id.mobile_watch_below);
         if (screen == null || videoFrame == null || below == null)
             throw new IllegalStateException("Missing mobile watch containers");
+        // The moving player must be allowed to cross the original 16:9 row
+        // while it shrinks toward the bottom-right floating-window position.
+        screen.setClipChildren(false);
+        screen.setClipToPadding(false);
+        videoFrame.setClipChildren(false);
 
         // A single phone-only control surface delegates to the ORIGINAL
         // playback engine; the oversized TV transport is hidden on mobile.
@@ -126,7 +131,7 @@ final class MobileWatchPage {
         addPill(actions, "Captions", () -> player.mobileAction(R.id.lb_control_closed_captioning));
         addPill(actions, "Comments", player::openMobileComments);
         addPill(actions, "Settings", touchControls::openSettings);
-        addPill(actions, "PiP", () -> activity.enterMobilePip(false));
+        addPill(actions, "PiP", () -> activity.enterMobilePip(true));
         LinearLayout.LayoutParams actionParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(52));
         actionParams.topMargin = dp(8);

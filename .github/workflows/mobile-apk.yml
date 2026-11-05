@@ -9,6 +9,7 @@ on:
       - 'feature/mobile-v6-touch-polish-*'
       - 'feature/mobile-v7-youtube-settings-pip-media-*'
       - 'feature/mobile-v7-4-*'
+      - 'fix/mobile-v7-5-*'
   workflow_dispatch:
 
 concurrency:
@@ -47,6 +48,9 @@ jobs:
       - name: Test null-video duration regression
         run: |
           ./gradlew --no-daemon --stacktrace :common:testStbetaDebugUnitTest --tests "*ExoPlayerControllerDurationTest"
+      - name: Test PiP dismiss and fullscreen lifecycle
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobilePipLifecyclePolicyTest"
       - name: Build installable debug-signed mobile APK
         run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
@@ -67,8 +71,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-4-ux-swipe-pip-20261105 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.4 - Dynamic Mobile UI, PiP and Pull Refresh (5 Nov 2026)" \
-            --notes "v7.4: handheld status bar safe areas; full-width searchable channel browser; spring pull-to-refresh on Home, grids, channels and related feeds; drag-to-PiP shrink/spring animation; audio-language/advanced playback settings; related videos separated from chapters; media notification state/lockscreen controls; stop playback after PiP close; sidebar overscroll. Based on proven v7.3 null-duration regression test. Device verification pending; leave master untouched." \
+          gh release create mobile-preview-v7-5-pip-lifecycle-20261105 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.5 - PiP Close Stops Playback and Browse Stays Open (5 Nov 2026)" \
+            --notes "v7.5: track real Android PiP lifecycle; stop and release ExoPlayer/media service when the floating window is dismissed even if isFinishing=false; open the existing browse task only after PiP is confirmed active; move the actual video thumbnail toward the bottom-right while dragging using stable raw touch coordinates; use Android singleTask launch mode on mobile, preserve TV mode and v7.4 features. Automated tests pass required before release; physical phone confirmation pending." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-4-ux-swipe-pip-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-5-pip-lifecycle-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber

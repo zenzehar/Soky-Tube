@@ -4,5 +4,12 @@
     <!-- Mobile preview only: clean installs must not silently restore old
          preferences from Android Backup, which obscures crash diagnosis. -->
     <application android:allowBackup="false"
-        tools:replace="android:allowBackup" />
+        tools:replace="android:allowBackup">
+        <!-- Handheld player follows Android's recommended single-task PiP model
+             instead of the inherited TV singleInstance activity task. -->
+        <activity
+            android:name="com.liskovsoft.smartyoutubetv2.tv.ui.playback.PlaybackActivity"
+            android:launchMode="singleTask"
+            tools:replace="android:launchMode" />
+    </application>
 </manifest>
