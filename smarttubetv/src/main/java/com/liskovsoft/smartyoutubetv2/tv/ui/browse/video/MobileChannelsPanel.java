@@ -23,7 +23,6 @@ import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileVideoFeed;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.function.Consumer;
 
 /** Handheld channel picker: never inherits the TV two-column grid widths.
  * The original Leanback adapters remain the authoritative channel/video data.
@@ -33,11 +32,11 @@ final class MobileChannelsPanel extends LinearLayout {
     private final LinearLayout chips;
     private final TextView selected;
     private final MobileVideoFeed feed;
-    private final Consumer<Video> onChannel;
+    private final MobileVideoFeed.OnVideoClick onChannel;
     private String selectedId;
 
-    MobileChannelsPanel(Context context, Consumer<Video> onChannel,
-            Consumer<Video> onVideo, Runnable onRefresh) {
+    MobileChannelsPanel(Context context, MobileVideoFeed.OnVideoClick onChannel,
+            MobileVideoFeed.OnVideoClick onVideo, Runnable onRefresh) {
         super(context);
         this.onChannel = onChannel;
         setOrientation(VERTICAL);
@@ -65,7 +64,7 @@ final class MobileChannelsPanel extends LinearLayout {
         chips.setOrientation(HORIZONTAL);
         scroller.addView(chips);
         addView(scroller, new LayoutParams(LayoutParams.MATCH_PARENT, dp(53)));
-        feed = new MobileVideoFeed(context, onVideo::accept, false);
+        feed = new MobileVideoFeed(context, onVideo, false);
         feed.setOnRefresh(onRefresh);
         addView(feed.getView(), new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f));
     }
@@ -104,7 +103,7 @@ final class MobileChannelsPanel extends LinearLayout {
         selectedId = channel.channelId != null ? channel.channelId : channel.videoId;
         selected.setText(channelName(channel));
         renderChips();
-        onChannel.accept(channel);
+        onChannel.onVideo(channel);
     }
     private void renderChips() {
         chips.removeAllViews();
