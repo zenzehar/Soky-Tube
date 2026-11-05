@@ -19,6 +19,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.GestureDetector;
+import android.view.animation.OvershootInterpolator;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -64,6 +65,7 @@ final class MobileTouchPlayerControls {
     private boolean released;
     private boolean running = true;
     private Boolean lastMediaPlaying;
+    private boolean draggingToPip;
 
     private final Runnable dismiss = () -> {
         if (!tracking && player.getPlayWhenReady()) setVisible(false);
@@ -145,14 +147,47 @@ final class MobileTouchPlayerControls {
         root.setOnTouchListener(new View.OnTouchListener() {
             float downY, downX;
             @Override public boolean onTouch(View v, MotionEvent event) {
-                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                int action = event.getActionMasked();
+                if (action == MotionEvent.ACTION_DOWN) {
                     downY = event.getY();
                     downX = event.getX();
-                } else if (event.getActionMasked() == MotionEvent.ACTION_UP) {
-                    float dy = event.getY() - downY;
-                    float dx = Math.abs(event.getX() - downX);
-                    if (dy > dp(72) && Math.abs(dy) > 1.5f * dx) {
-                        activity.enterMobilePip(true);
+                    draggingToPip = false;
+                    root.animate().cancel();
+                    return gestures.onTouchEvent(event);
+                }
+                float dy = Math.max(0f, event.getY() - downY);
+                float dx = Math.abs(event.getX() - downX);
+                if (action == MotionEvent.ACTION_MOVE) {
+                    if (!draggingToPip && dy > dp(14) && dy > dx * 1.4f)
+                        draggingToPip = true;
+                    if (draggingToPip) {
+                        // Follow the finger, reducing the video toward its PiP size.
+                        float progress = Math.min(1f, dy / Math.max(dp(130), root.getHeight()));
+                        root.setPivotX(root.getWidth() / 2f);
+                        root.setPivotY(0f);
+                        root.setTranslationY(dp(42) * progress);
+                        root.setScaleX(1f - .22f * progress);
+                        root.setScaleY(1f - .22f * progress);
+                        return true;
+                    }
+                }
+                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                    if (draggingToPip) {
+                        boolean complete = action == MotionEvent.ACTION_UP &&
+                                dy > dp(72) && dy > dx * 1.4f;
+                        draggingToPip = false;
+                        if (complete) {
+                            // Physical shrinking animation bridges into platform PiP,
+                            // which then takes over the system-level floating window.
+                            root.animate().translationY(dp(65)).scaleX(.76f).scaleY(.76f)
+                                    .setDuration(165)
+                                    .withEndAction(() -> {
+                                        activity.enterMobilePip(true);
+                                        root.postDelayed(this::resetPipTransform, 220);
+                                    }).start();
+                        } else {
+                            resetPipTransform();
+                        }
                         return true;
                     }
                 }
@@ -275,21 +310,63 @@ final class MobileTouchPlayerControls {
         scheduleDismiss();
     }
 
+    void resetPipTransform() {
+        root.animate().cancel();
+        root.animate().translationY(0f).scaleX(1f).scaleY(1f)
+                .setDuration(260).setInterpolator(new OvershootInterpolator(.65f)).start();
+    }
+
     // YouTube-style navigation hierarchy with live options from the actual
     // ExoPlayer tracks, not hard-coded '4K/1080p' choices that may not exist.
     void openSettings() { showOptions(); }
 
     private void showOptions() {
         showSheet("Settings", null,
-                new String[]{"Quality", "Playback speed", "Captions", "Chapters",
-                        "Comments", "Loop video", "Picture-in-picture",
-                        "Background audio", "Video information"},
-                new Runnable[]{this::showQuality, this::showSpeeds, this::showCaptions,
-                        this::showChapters, player::openMobileComments,
-                        () -> runAction(R.id.action_repeat),
+                new String[]{"Quality", "Playback speed", "Audio language", "Captions",
+                        "Chapters", "Comments", "Advanced options",
+                        "Picture-in-picture", "Background audio"},
+                new Runnable[]{this::showQuality, this::showSpeeds, this::showAudioLanguage,
+                        this::showCaptions, this::showChapters, player::openMobileComments,
+                        this::showAdvancedOptions,
                         () -> activity.enterMobilePip(false),
-                        activity::startMobileBackgroundAudio,
-                        () -> runAction(R.id.action_info)});
+                        activity::startMobileBackgroundAudio});
+    }
+
+    private void showAudioLanguage() {
+        List<FormatItem> tracks = player.getAudioFormats();
+        if (tracks == null || tracks.isEmpty()) {
+            android.widget.Toast.makeText(activity,
+                    "Alternative audio tracks are unavailable for this video",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        ArrayList<String> labels = new ArrayList<>();
+        ArrayList<Runnable> actions = new ArrayList<>();
+        for (FormatItem track : tracks) {
+            if (track == null) continue;
+            String language = track.getLanguage();
+            CharSequence title = track.getTitle();
+            String label = !TextUtils.isEmpty(language) ? language :
+                    title != null ? title.toString() : "Original audio";
+            if (track.isSelected()) label += "   ✓";
+            labels.add(label);
+            actions.add(() -> player.setFormat(track));
+        }
+        showSheet("Audio language", "Available audio tracks from this video",
+                labels.toArray(new String[0]), actions.toArray(new Runnable[0]));
+    }
+
+    private void showAdvancedOptions() {
+        showSheet("Advanced options", null,
+                new String[]{"Video information", "Loop video",
+                        "SponsorBlock settings", "Audio language",
+                        "Exact resolution", "Playback speed"},
+                new Runnable[]{() -> runAction(R.id.action_info),
+                        () -> runAction(R.id.action_repeat),
+                        () -> com.liskovsoft.smartyoutubetv2.common.app.presenters.settings
+                                .SponsorBlockSettingsPresenter.instance(activity).show(),
+                        this::showAudioLanguage,
+                        this::showAdvancedQuality, this::showSpeeds});
     }
 
     private void showChapters() {
@@ -422,7 +499,8 @@ final class MobileTouchPlayerControls {
             sheetHeader.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));
             back.setOnClickListener(v -> {
                 sheet.dismiss();
-                if (title.startsWith("Advanced")) showQuality();
+                if (title.startsWith("Advanced · Quality")) showQuality();
+                else if ("Audio language".equals(title) || "Advanced options".equals(title)) showOptions();
                 else showOptions();
             });
         }
@@ -529,7 +607,10 @@ final class MobileTouchPlayerControls {
         }
         if (signature != sponsorMarkerSignature) {
             sponsorMarkerSignature = signature;
-            sponsorMarkers.updateTrustedSponsorSegments(source);
+            // A temporary empty response must not erase original colour markers
+            // while the SponsorBlock request is still completing.
+            if (!source.isEmpty())
+                sponsorMarkers.updateTrustedSponsorSegments(source);
         }
     }
     void setChapters(List<Video> chapters) {

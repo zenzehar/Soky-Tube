@@ -391,6 +391,17 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         }
     }
 
+    void refreshMobileSuggestions() {
+        if (!MobileUi.isHandheld(getContext()) || mPlaybackPresenter == null ||
+                getVideo() == null) return;
+        // Request the same related-video sources as the original player.
+        // Do not reload or seek the currently playing video.
+        com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.SuggestionsController
+                controller = mPlaybackPresenter.getController(
+                  com.liskovsoft.smartyoutubetv2.common.app.models.playback.controllers.SuggestionsController.class);
+        if (controller != null) controller.loadSuggestions(getVideo());
+    }
+
     private void reportMobileSuggestions() {
         if (!MobileUi.isHandheld(getContext()) || getView() == null) return;
         // Post AFTER the existing adapters handle the video group mutation.

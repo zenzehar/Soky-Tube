@@ -139,7 +139,7 @@ final class MobileChannelsPanel extends LinearLayout {
         final ArrayList<String> names = new ArrayList<>();
         for (Video channel : matches) names.add(channelName(channel));
         ArrayAdapter<String> adapter = new ArrayAdapter<>(getContext(),
-                android.R.layout.simple_list_item_1, names);
+                android.R.layout.simple_list_item_1, new ArrayList<>(names));
         EditText filter = new EditText(getContext());
         filter.setSingleLine(true);
         filter.setHint("Search channels");

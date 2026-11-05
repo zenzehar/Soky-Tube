@@ -184,14 +184,28 @@ public class PlaybackActivity extends LeanbackActivity {
     }
     @Override protected void onStop() {
         if (mMobileWatch != null) mMobileWatch.stop();
-        if (MobileUi.isHandheld(this) && mPlaybackFragment != null &&
-                mPlaybackFragment.getPlayWhenReady()) {
-            mPlaybackFragment.keepMobilePlaybackInBackground(true);
+        if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
+            if (isFinishing() && !mMobileAudioOnly) {
+                // Swiping away/closing PiP is an EXIT, not a request to keep
+                // an invisible video playing forever in the background.
+                mPlaybackFragment.setPlayWhenReady(false);
+                mPlaybackFragment.keepMobilePlaybackInBackground(false);
+                MobilePlaybackService.stop(this);
+            } else if (mPlaybackFragment.getPlayWhenReady()) {
+                mPlaybackFragment.keepMobilePlaybackInBackground(true);
+            }
         }
         super.onStop();
     }
     @Override
     protected void onDestroy() {
+        if (MobileUi.isHandheld(this) && !mMobileAudioOnly && mPlaybackFragment != null) {
+            // PiP close can destroy the Activity without first invoking
+            // onPictureInPictureModeChanged(false). Always stop owned playback.
+            mPlaybackFragment.setPlayWhenReady(false);
+            mPlaybackFragment.keepMobilePlaybackInBackground(false);
+            MobilePlaybackService.stop(this);
+        }
         if (mMobileWatch != null) mMobileWatch.release();
         mMobileWatch = null;
         super.onDestroy();
