@@ -10,7 +10,7 @@
 
     <!-- Handheld-only runtime overlay: cancel inherited Android TV fullscreen
          before any phone views are measured. Does not affect TV mode. -->
-    <style name="App.Theme.SokyMobile.SafeArea">
+    <style name="SokyMobileSafeAreaOverlay">
         <item name="android:windowFullscreen">false</item>
         <item name="android:windowTranslucentStatus">false</item>
         <item name="android:windowTranslucentNavigation">false</item>
