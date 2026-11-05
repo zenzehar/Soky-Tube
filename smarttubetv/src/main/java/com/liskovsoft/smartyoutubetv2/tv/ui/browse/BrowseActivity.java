@@ -22,6 +22,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.LeanbackActivity;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileSystemBars;
 import com.liskovsoft.smartyoutubetv2.tv.ui.main.MainApplication;
 
 /** YouTube-like touch chrome; Android TV still uses the unchanged Leanback UI. */
@@ -37,23 +38,9 @@ public class BrowseActivity extends LeanbackActivity {
         try {
             setContentView(R.layout.fragment_main);
             if (MobileUi.isHandheld(this)) {
-                // The TV theme requests immersive/edge-to-edge fullscreen.
-                // Restore Android's real status and navigation bar insets on phones;
-                // do not lay the browse toolbar beneath the camera cutout.
-                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN |
-                        WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS |
-                        WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
-                if (android.os.Build.VERSION.SDK_INT >= 30) {
-                    getWindow().setDecorFitsSystemWindows(true);
-                    android.view.WindowInsetsController bars = getWindow().getInsetsController();
-                    if (bars != null) bars.show(android.view.WindowInsets.Type.statusBars() |
-                            android.view.WindowInsets.Type.navigationBars());
-                }
-                getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-                getWindow().setStatusBarColor(Color.WHITE);
-                getWindow().setNavigationBarColor(Color.WHITE);
-                getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR |
-                        View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+                // Phone status, cutout and navigation bars must be visible
+                // BEFORE applying layout; the TV app's themes are fullscreen.
+                MobileSystemBars.install(this, true);
                 installMobileNavigation();
             }
         } catch (NoClassDefFoundError e) {
@@ -65,6 +52,7 @@ public class BrowseActivity extends LeanbackActivity {
     protected void onResume() {
         super.onResume();
         if (!MobileUi.isHandheld(this)) return;
+        MobileSystemBars.ensure(this, true);
         // Visible after a crash/relaunch without requiring adb or special access.
         String report = MainApplication.consumeMobileCrashReport(this);
         if (report == null) return;
@@ -252,11 +240,22 @@ public class BrowseActivity extends LeanbackActivity {
 
     @Override public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        if (mMobileToolbar != null) applyWindowSizing();
+        if (mMobileToolbar != null) {
+            MobileSystemBars.ensure(this, true);
+            applyWindowSizing();
+        }
+    }
+
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && MobileUi.isHandheld(this))
+            MobileSystemBars.ensure(this, true);
     }
 
     @Override protected void initTheme() {
         int browseTheme = MainUIData.instance(this).getColorScheme().browseThemeResId;
         if (browseTheme > 0) setTheme(browseTheme);
+        if (MobileUi.isHandheld(this))
+            getTheme().applyStyle(R.style.App_Theme_SokyMobile_SafeArea, true);
     }
 }
