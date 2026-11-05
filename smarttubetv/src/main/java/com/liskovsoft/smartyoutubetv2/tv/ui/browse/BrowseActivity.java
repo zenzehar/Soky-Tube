@@ -19,6 +19,8 @@ import androidx.fragment.app.Fragment;
 
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
+import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
+import com.liskovsoft.smartyoutubetv2.common.app.presenters.BrowsePresenter;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.LeanbackActivity;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
@@ -31,6 +33,7 @@ public class BrowseActivity extends LeanbackActivity {
     private LinearLayout mMobileBottomBar;
     private View mMobileMain;
     private TextView mMobileTitle;
+    private MobileYouPage mMobileYou;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -53,6 +56,7 @@ public class BrowseActivity extends LeanbackActivity {
         super.onResume();
         if (!MobileUi.isHandheld(this)) return;
         MobileSystemBars.ensure(this, true);
+        if (mMobileYou != null) mMobileYou.onResume();
         // Visible after a crash/relaunch without requiring adb or special access.
         String report = MainApplication.consumeMobileCrashReport(this);
         if (report == null) return;
@@ -132,12 +136,7 @@ public class BrowseActivity extends LeanbackActivity {
         addTab(R.drawable.mobile_ic_play, "Shorts", v -> selectNamedSection("shorts", v));
         addTab(R.drawable.mobile_ic_library, "Subscriptions",
                 v -> selectNamedSection("subscription", v));
-        addTab(R.drawable.mobile_ic_user, "You", v -> {
-            BrowseFragment browse = browseFragment();
-            if (browse == null || !browse.selectMobileSectionByName("history")) {
-                showSections(v);
-            }
-        });
+        addTab(R.drawable.mobile_ic_user, "You", v -> showYouPage());
 
         FrameLayout.LayoutParams header = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, dp(60), Gravity.TOP);
@@ -145,6 +144,27 @@ public class BrowseActivity extends LeanbackActivity {
                 FrameLayout.LayoutParams.MATCH_PARENT, dp(64), Gravity.BOTTOM);
         content.addView(mMobileToolbar, header);
         content.addView(mMobileBottomBar, footer);
+
+        mMobileYou = new MobileYouPage(this, new MobileYouPage.Navigation() {
+            @Override public boolean openSection(String name) {
+                BrowseFragment browse = browseFragment();
+                if (browse != null && browse.selectMobileSectionByName(name)) {
+                    hideYouPage();
+                    return true;
+                }
+                return false;
+            }
+            @Override public void openVideo(Video video) {
+                if (video != null) BrowsePresenter.instance(BrowseActivity.this)
+                        .onVideoItemClicked(video);
+            }
+            @Override public void openSearch() { onSearchRequested(); }
+        });
+        FrameLayout.LayoutParams youParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT, Gravity.TOP);
+        youParams.bottomMargin = dp(64);
+        content.addView(mMobileYou.getView(), youParams);
         mMobileToolbar.bringToFront();
         mMobileBottomBar.bringToFront();
         applyWindowSizing();
@@ -206,18 +226,41 @@ public class BrowseActivity extends LeanbackActivity {
 
     @Override
     public void onBackPressed() {
+        if (mMobileYou != null && mMobileYou.isShown()) {
+            selectHome();
+            if (mMobileBottomBar != null && mMobileBottomBar.getChildCount() > 0)
+                highlightMobileTab(mMobileBottomBar.getChildAt(0));
+            return;
+        }
         BrowseFragment browse = browseFragment();
         if (browse != null && browse.closeMobileDrawer()) return;
         super.onBackPressed();
     }
 
+    private void showYouPage() {
+        if (mMobileYou == null) return;
+        mMobileYou.show();
+        if (mMobileMain != null) mMobileMain.setVisibility(View.GONE);
+        if (mMobileToolbar != null) mMobileToolbar.setVisibility(View.GONE);
+        applyWindowSizing();
+    }
+    private void hideYouPage() {
+        if (mMobileYou != null) mMobileYou.hide();
+        if (mMobileMain != null) mMobileMain.setVisibility(View.VISIBLE);
+        if (mMobileToolbar != null) mMobileToolbar.setVisibility(View.VISIBLE);
+        applyWindowSizing();
+    }
     private void selectHome() {
+        hideYouPage();
         BrowseFragment fragment = browseFragment();
         if (fragment != null) fragment.selectSection(0, true);
     }
     private boolean selectNamedSection(String label, View source) {
         BrowseFragment fragment = browseFragment();
-        if (fragment != null && fragment.selectMobileSectionByName(label)) return true;
+        if (fragment != null && fragment.selectMobileSectionByName(label)) {
+            hideYouPage();
+            return true;
+        }
         showSections(source);
         return false;
     }
@@ -236,6 +279,12 @@ public class BrowseActivity extends LeanbackActivity {
         fragmentParams.topMargin = header;
         fragmentParams.bottomMargin = footer;
         mMobileMain.setLayoutParams(fragmentParams);
+        if (mMobileYou != null) {
+            FrameLayout.LayoutParams you = (FrameLayout.LayoutParams)
+                    mMobileYou.getView().getLayoutParams();
+            you.bottomMargin = footer;
+            mMobileYou.getView().setLayoutParams(you);
+        }
     }
 
     @Override public void onConfigurationChanged(Configuration newConfig) {
@@ -250,6 +299,14 @@ public class BrowseActivity extends LeanbackActivity {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus && MobileUi.isHandheld(this))
             MobileSystemBars.ensure(this, true);
+    }
+
+    @Override protected void onDestroy() {
+        if (mMobileYou != null) {
+            mMobileYou.destroy();
+            mMobileYou = null;
+        }
+        super.onDestroy();
     }
 
     @Override protected void initTheme() {
