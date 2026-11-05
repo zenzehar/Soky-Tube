@@ -12,6 +12,7 @@ on:
       - 'fix/mobile-v7-5-*'
       - 'fix/mobile-v7-6-*'
       - 'fix/mobile-v7-7-*'
+      - 'feature/mobile-v7-8-*'
   workflow_dispatch:
 
 concurrency:
@@ -79,8 +80,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-7-finger-tracked-safe-area-20261105 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.7 - Finger-Tracked PiP and Safe Status Bars (5 Nov 2026)" \
-            --notes "v7.7: YouTube-like direct finger tracking for video minimisation, accurate touch pivot, deliberate drag threshold and fast downward fling exception; safe status-bar/camera-cutout/navigation-bar layout in Home and portrait player, including older OEM edge-to-edge behaviour; no inherited TV fullscreen theme for handheld. Preserves v7.6 full-device bottom-right PiP morph and v7.5 background stop. Hardware playback and gesture verification pending; TV mode unchanged." \
+          gh release create mobile-preview-v7-8-you-tab-20261105 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.8 - YouTube-Like You Tab with Real History and Playlists (5 Nov 2026)" \
+            --notes "v7.8: dedicated handheld You page based on official YouTube layout: large signed-in account identity and avatar, account switching, Google Account action, horizontal real History and Playlists from original YouTube service, contextual menu and signed-in/out states; avatar shown in bottom You tab. Compatible with existing app history/playlist and video actions, pull-to-refresh. Keeps v7.7 finger PiP, safe-area and crash fixes; TV UI unchanged. Device/account testing pending." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-7-finger-tracked-safe-area-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-8-you-tab-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber

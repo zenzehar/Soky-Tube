@@ -19,6 +19,12 @@ import androidx.fragment.app.Fragment;
 
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
+import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
+import com.liskovsoft.smartyoutubetv2.common.app.presenters.BrowsePresenter;
+import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
+import com.liskovsoft.mediaserviceinterfaces.oauth.Account;
+import com.bumptech.glide.Glide;
+import android.text.TextUtils;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.LeanbackActivity;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
@@ -31,6 +37,10 @@ public class BrowseActivity extends LeanbackActivity {
     private LinearLayout mMobileBottomBar;
     private View mMobileMain;
     private TextView mMobileTitle;
+    private MobileYouPage mMobileYou;
+    private TextView mYouTabInitial;
+    private ImageView mYouTabPicture;
+    private MediaServiceManager.AccountChangeListener mAccountListener;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -53,6 +63,8 @@ public class BrowseActivity extends LeanbackActivity {
         super.onResume();
         if (!MobileUi.isHandheld(this)) return;
         MobileSystemBars.ensure(this, true);
+        if (mMobileYou != null) mMobileYou.onResume();
+        updateYouTabAvatar();
         // Visible after a crash/relaunch without requiring adb or special access.
         String report = MainApplication.consumeMobileCrashReport(this);
         if (report == null) return;
@@ -132,12 +144,7 @@ public class BrowseActivity extends LeanbackActivity {
         addTab(R.drawable.mobile_ic_play, "Shorts", v -> selectNamedSection("shorts", v));
         addTab(R.drawable.mobile_ic_library, "Subscriptions",
                 v -> selectNamedSection("subscription", v));
-        addTab(R.drawable.mobile_ic_user, "You", v -> {
-            BrowseFragment browse = browseFragment();
-            if (browse == null || !browse.selectMobileSectionByName("history")) {
-                showSections(v);
-            }
-        });
+        addTab(R.drawable.mobile_ic_user, "You", v -> showYouPage());
 
         FrameLayout.LayoutParams header = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, dp(60), Gravity.TOP);
@@ -145,10 +152,34 @@ public class BrowseActivity extends LeanbackActivity {
                 FrameLayout.LayoutParams.MATCH_PARENT, dp(64), Gravity.BOTTOM);
         content.addView(mMobileToolbar, header);
         content.addView(mMobileBottomBar, footer);
+
+        mMobileYou = new MobileYouPage(this, new MobileYouPage.Navigation() {
+            @Override public boolean openSection(String name) {
+                BrowseFragment browse = browseFragment();
+                if (browse != null && browse.selectMobileSectionByName(name)) {
+                    hideYouPage();
+                    return true;
+                }
+                return false;
+            }
+            @Override public void openVideo(Video video) {
+                if (video != null) BrowsePresenter.instance(BrowseActivity.this)
+                        .onVideoItemClicked(video);
+            }
+            @Override public void openSearch() { onSearchRequested(); }
+        });
+        FrameLayout.LayoutParams youParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT, Gravity.TOP);
+        youParams.bottomMargin = dp(64);
+        content.addView(mMobileYou.getView(), youParams);
         mMobileToolbar.bringToFront();
         mMobileBottomBar.bringToFront();
         applyWindowSizing();
         if (mMobileBottomBar.getChildCount() > 0) highlightMobileTab(mMobileBottomBar.getChildAt(0));
+        mAccountListener = account -> runOnUiThread(this::updateYouTabAvatar);
+        MediaServiceManager.instance().addAccountListener(mAccountListener);
+        updateYouTabAvatar();
     }
 
     private int ViewGroupHeight() { return dp(52); }
@@ -168,10 +199,30 @@ public class BrowseActivity extends LeanbackActivity {
         LinearLayout column = new LinearLayout(this);
         column.setOrientation(LinearLayout.VERTICAL);
         column.setGravity(Gravity.CENTER);
-        ImageView iconView = new ImageView(this);
-        iconView.setImageResource(image);
-        iconView.setColorFilter(0xFF202124);
-        column.addView(iconView, new LinearLayout.LayoutParams(dp(26), dp(26)));
+        if ("You".equals(title)) {
+            FrameLayout avatar = new FrameLayout(this);
+            mYouTabInitial = new TextView(this);
+            mYouTabInitial.setGravity(Gravity.CENTER);
+            mYouTabInitial.setTextColor(Color.WHITE);
+            mYouTabInitial.setTextSize(13);
+            mYouTabInitial.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            mYouTabInitial.setText("?");
+            GradientDrawable round = new GradientDrawable();
+            round.setShape(GradientDrawable.OVAL);
+            round.setColor(0xFF006359);
+            mYouTabInitial.setBackground(round);
+            avatar.addView(mYouTabInitial, new FrameLayout.LayoutParams(-1, -1));
+            mYouTabPicture = new ImageView(this);
+            mYouTabPicture.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            mYouTabPicture.setVisibility(View.GONE);
+            avatar.addView(mYouTabPicture, new FrameLayout.LayoutParams(-1, -1));
+            column.addView(avatar, new LinearLayout.LayoutParams(dp(27), dp(27)));
+        } else {
+            ImageView iconView = new ImageView(this);
+            iconView.setImageResource(image);
+            iconView.setColorFilter(0xFF202124);
+            column.addView(iconView, new LinearLayout.LayoutParams(dp(26), dp(26)));
+        }
         TextView label = new TextView(this);
         label.setText(title);
         label.setTextColor(0xFF202124);
@@ -195,29 +246,70 @@ public class BrowseActivity extends LeanbackActivity {
             if (!(view instanceof LinearLayout)) continue;
             LinearLayout tab = (LinearLayout) view;
             boolean active = view == selected;
-            ImageView tabIcon = (ImageView) tab.getChildAt(0);
+            View tabIcon = tab.getChildAt(0);
             TextView tabText = (TextView) tab.getChildAt(1);
             int ink = active ? 0xFF111111 : 0xFF707070;
-            tabIcon.setColorFilter(ink);
+            if (tabIcon instanceof ImageView)
+                ((ImageView) tabIcon).setColorFilter(ink);
             tabText.setTextColor(ink);
             tabText.setTypeface(Typeface.DEFAULT, active ? Typeface.BOLD : Typeface.NORMAL);
         }
     }
 
+    private void updateYouTabAvatar() {
+        if (mYouTabInitial == null || mYouTabPicture == null) return;
+        Account account = MediaServiceManager.instance().getSelectedAccount();
+        String name = account != null ? account.getName() : null;
+        mYouTabInitial.setText(!TextUtils.isEmpty(name)
+                ? name.substring(0, 1).toUpperCase(java.util.Locale.getDefault()) : "?");
+        String image = account != null ? account.getAvatarImageUrl() : null;
+        if (!TextUtils.isEmpty(image)) {
+            mYouTabPicture.setVisibility(View.VISIBLE);
+            Glide.with(mYouTabPicture).load(image).circleCrop().into(mYouTabPicture);
+        } else {
+            Glide.with(mYouTabPicture).clear(mYouTabPicture);
+            mYouTabPicture.setVisibility(View.GONE);
+        }
+    }
+
     @Override
     public void onBackPressed() {
+        if (mMobileYou != null && mMobileYou.isShown()) {
+            selectHome();
+            if (mMobileBottomBar != null && mMobileBottomBar.getChildCount() > 0)
+                highlightMobileTab(mMobileBottomBar.getChildAt(0));
+            return;
+        }
         BrowseFragment browse = browseFragment();
         if (browse != null && browse.closeMobileDrawer()) return;
         super.onBackPressed();
     }
 
+    private void showYouPage() {
+        if (mMobileYou == null) return;
+        updateYouTabAvatar();
+        mMobileYou.show();
+        if (mMobileMain != null) mMobileMain.setVisibility(View.GONE);
+        if (mMobileToolbar != null) mMobileToolbar.setVisibility(View.GONE);
+        applyWindowSizing();
+    }
+    private void hideYouPage() {
+        if (mMobileYou != null) mMobileYou.hide();
+        if (mMobileMain != null) mMobileMain.setVisibility(View.VISIBLE);
+        if (mMobileToolbar != null) mMobileToolbar.setVisibility(View.VISIBLE);
+        applyWindowSizing();
+    }
     private void selectHome() {
+        hideYouPage();
         BrowseFragment fragment = browseFragment();
         if (fragment != null) fragment.selectSection(0, true);
     }
     private boolean selectNamedSection(String label, View source) {
         BrowseFragment fragment = browseFragment();
-        if (fragment != null && fragment.selectMobileSectionByName(label)) return true;
+        if (fragment != null && fragment.selectMobileSectionByName(label)) {
+            hideYouPage();
+            return true;
+        }
         showSections(source);
         return false;
     }
@@ -236,6 +328,12 @@ public class BrowseActivity extends LeanbackActivity {
         fragmentParams.topMargin = header;
         fragmentParams.bottomMargin = footer;
         mMobileMain.setLayoutParams(fragmentParams);
+        if (mMobileYou != null) {
+            FrameLayout.LayoutParams you = (FrameLayout.LayoutParams)
+                    mMobileYou.getView().getLayoutParams();
+            you.bottomMargin = footer;
+            mMobileYou.getView().setLayoutParams(you);
+        }
     }
 
     @Override public void onConfigurationChanged(Configuration newConfig) {
@@ -250,6 +348,18 @@ public class BrowseActivity extends LeanbackActivity {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus && MobileUi.isHandheld(this))
             MobileSystemBars.ensure(this, true);
+    }
+
+    @Override protected void onDestroy() {
+        if (mMobileYou != null) {
+            mMobileYou.destroy();
+            mMobileYou = null;
+        }
+        if (mAccountListener != null) {
+            MediaServiceManager.instance().removeAccountListener(mAccountListener);
+            mAccountListener = null;
+        }
+        super.onDestroy();
     }
 
     @Override protected void initTheme() {
