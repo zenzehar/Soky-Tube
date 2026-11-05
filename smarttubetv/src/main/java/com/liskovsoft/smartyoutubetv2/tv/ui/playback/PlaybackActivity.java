@@ -292,7 +292,7 @@ public class PlaybackActivity extends LeanbackActivity {
             setTheme(playerThemeResId);
         }
         if (MobileUi.isHandheld(this))
-            getTheme().applyStyle(R.style.App_Theme_SokyMobile_SafeArea, true);
+            getTheme().applyStyle(R.style.SokyMobileSafeAreaOverlay, true);
     }
 
     @Override
