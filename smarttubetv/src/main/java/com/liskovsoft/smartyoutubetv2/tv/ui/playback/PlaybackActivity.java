@@ -135,11 +135,8 @@ public class PlaybackActivity extends LeanbackActivity {
                     .setAspectRatio(new Rational(isMobileShorts() ? 9 : 16,
                             isMobileShorts() ? 16 : 9));
             View viewport = findViewById(R.id.mobile_player_frame);
-            if (viewport != null) {
-                Rect source = new Rect();
-                if (viewport.getGlobalVisibleRect(source) && !source.isEmpty())
-                    params.setSourceRectHint(source);
-            }
+            Rect source = mobilePipSourceRect(viewport);
+            if (source != null) params.setSourceRectHint(source);
             if (Build.VERSION.SDK_INT >= 31) params.setSeamlessResizeEnabled(true);
             boolean entered = enterPictureInPictureMode(params.build());
             if (entered) {
@@ -191,6 +188,20 @@ public class PlaybackActivity extends LeanbackActivity {
         MobilePlaybackService.stop(this);
     }
 
+    private Rect mobilePipSourceRect(View viewport) {
+        if (viewport == null || viewport.getWidth() <= 0 || viewport.getHeight() <= 0)
+            return null;
+        // getGlobalVisibleRect can clip the transformed video to the original
+        // 16:9 parent. Supply the ACTUAL scaled rectangle in screen space as
+        // the native PiP animation's source.
+        int[] location = new int[2];
+        viewport.getLocationOnScreen(location);
+        int width = Math.max(1, Math.round(viewport.getWidth() * viewport.getScaleX()));
+        int height = Math.max(1, Math.round(viewport.getHeight() * viewport.getScaleY()));
+        return new Rect(location[0], location[1],
+                location[0] + width, location[1] + height);
+    }
+
     private boolean isMobileShorts() {
         return mPlaybackFragment != null && mPlaybackFragment.getVideo() != null &&
                 mPlaybackFragment.getVideo().isShorts;
@@ -202,10 +213,8 @@ public class PlaybackActivity extends LeanbackActivity {
                 .setAspectRatio(new Rational(isMobileShorts() ? 9 : 16,
                         isMobileShorts() ? 16 : 9));
         View viewport = findViewById(R.id.mobile_player_frame);
-        if (viewport != null && viewport.getWidth() > 0 && viewport.getHeight() > 0) {
-            Rect bounds = new Rect();
-            if (viewport.getGlobalVisibleRect(bounds)) params.setSourceRectHint(bounds);
-        }
+        Rect source = mobilePipSourceRect(viewport);
+        if (source != null) params.setSourceRectHint(source);
         if (Build.VERSION.SDK_INT >= 31) {
             params.setAutoEnterEnabled(!mMobileAudioOnly && mPlaybackFragment != null
                     && mPlaybackFragment.getPlayWhenReady());

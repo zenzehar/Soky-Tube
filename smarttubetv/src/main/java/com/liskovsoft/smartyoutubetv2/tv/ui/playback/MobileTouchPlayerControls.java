@@ -1,6 +1,10 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.playback;
 
 import android.content.Context;
+import android.graphics.Point;
+import android.graphics.Rect;
+import android.os.Build;
+import android.view.WindowInsets;
 import android.app.Dialog;
 import android.graphics.drawable.ColorDrawable;
 import android.text.TextUtils;
@@ -156,6 +160,12 @@ final class MobileTouchPlayerControls {
                     downX = event.getRawX();
                     draggingToPip = false;
                     videoContainer.animate().cancel();
+                    // The next drag always begins with the full-size source
+                    // video, never a partially restored/stale transform.
+                    videoContainer.setTranslationX(0f);
+                    videoContainer.setTranslationY(0f);
+                    videoContainer.setScaleX(1f);
+                    videoContainer.setScaleY(1f);
                     float[] goal = bottomRightPipDestination();
                     targetDx = goal[0];
                     targetDy = goal[1];
@@ -167,8 +177,10 @@ final class MobileTouchPlayerControls {
                 float dy = Math.max(0f, event.getRawY() - downY);
                 float dx = Math.abs(event.getRawX() - downX);
                 if (action == MotionEvent.ACTION_MOVE) {
-                    if (!draggingToPip && dy > dp(14) && dy > dx * 1.4f)
+                    if (!draggingToPip && dy > dp(14) && dy > dx * 1.4f) {
                         draggingToPip = true;
+                        liftVideoAboveWatchPage();
+                    }
                     if (draggingToPip) {
                         // Travel diagonally to the actual bottom-right target,
                         // with a smaller thumbnail and a stable finger gesture.
@@ -198,10 +210,14 @@ final class MobileTouchPlayerControls {
                                     .setDuration(210)
                                     .withEndAction(() -> {
                                         activity.enterMobilePip(true);
-                                        // Android owns the final PiP window location.
-                                        // Restore our source surface after handoff.
-                                        root.postDelayed(
-                                                MobileTouchPlayerControls.this::resetPipTransform, 420);
+                                        // The Android PiP transition consumes the
+                                        // morphed rectangle as its source. Do not
+                                        // animate BACK to the large video while the
+                                        // system is shrinking it to the PiP window.
+                                        root.postDelayed(() -> {
+                                            if (!activity.isInPipMode())
+                                                resetPipTransform();
+                                        }, 850);
                                     }).start();
                         } else {
                             resetPipTransform();
@@ -329,30 +345,65 @@ final class MobileTouchPlayerControls {
     }
 
     private float[] bottomRightPipDestination() {
+        // v7.5 measured the player Activity's decor bounds. Those can shrink
+        // to the player row as the system starts PiP. The destination must
+        // instead use the PHYSICAL PHONE DISPLAY, including the whole page
+        // below the video, not the height of its 16:9 player window.
+        Point screenSize = new Point();
+        activity.getWindowManager().getDefaultDisplay().getRealSize(screenSize);
+        int bottomSystemInset = 0;
         View decor = activity.getWindow().getDecorView();
+        WindowInsets insets = decor.getRootWindowInsets();
+        if (insets != null) {
+            if (Build.VERSION.SDK_INT >= 30) {
+                bottomSystemInset = insets.getInsetsIgnoringVisibility(
+                        WindowInsets.Type.navigationBars()).bottom;
+            } else if (Build.VERSION.SDK_INT >= 23) {
+                bottomSystemInset = insets.getStableInsetBottom();
+            }
+        }
         int[] playerPosition = new int[2];
-        int[] decorPosition = new int[2];
         videoContainer.getLocationOnScreen(playerPosition);
-        decor.getLocationOnScreen(decorPosition);
-        float w = Math.max(1, videoContainer.getWidth());
-        float h = Math.max(1, videoContainer.getHeight());
-        float decorWidth = Math.max(1, decor.getWidth());
-        float decorHeight = Math.max(1, decor.getHeight());
-        float miniWidth = Math.min(dp(206), decorWidth * .47f);
-        float scale = Math.max(.18f, Math.min(.60f, miniWidth / w));
-        float targetCenterX = decorPosition[0] + decorWidth - dp(16) - w * scale / 2f;
-        float targetCenterY = decorPosition[1] + decorHeight - dp(70) - h * scale / 2f;
-        float originCenterX = playerPosition[0] + w / 2f;
-        float originCenterY = playerPosition[1] + h / 2f;
-        return new float[]{targetCenterX - originCenterX,
-                targetCenterY - originCenterY, scale};
+        return MobilePipMorphGeometry.target(
+                screenSize.x, screenSize.y, bottomSystemInset,
+                playerPosition[0], playerPosition[1],
+                videoContainer.getWidth(), videoContainer.getHeight(),
+                activity.getResources().getDisplayMetrics().density);
+    }
+
+    private void liftVideoAboveWatchPage() {
+        // The description/related-video panel draws AFTER the video in the
+        // vertical LinearLayout. Without elevation, it covers the entire
+        // bottom-screen part of the morph so the thumbnail seems confined
+        // to the original video frame. Keep all ancestors unclipped.
+        android.view.ViewParent parent = videoContainer.getParent();
+        while (parent instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) parent;
+            group.setClipChildren(false);
+            group.setClipToPadding(false);
+            parent = group.getParent();
+        }
+        videoContainer.setElevation(dp(32));
+    }
+
+    /** Called when Android has taken over rendering the real PiP surface. */
+    void finishPipHandoff() {
+        videoContainer.animate().cancel();
+        videoContainer.setTranslationX(0f);
+        videoContainer.setTranslationY(0f);
+        videoContainer.setScaleX(1f);
+        videoContainer.setScaleY(1f);
+        videoContainer.setElevation(0f);
     }
 
     void resetPipTransform() {
         videoContainer.animate().cancel();
         videoContainer.animate().translationX(0f).translationY(0f)
                 .scaleX(1f).scaleY(1f)
-                .setDuration(260).setInterpolator(new OvershootInterpolator(.65f)).start();
+                .setDuration(260)
+                .setInterpolator(new OvershootInterpolator(.65f))
+                .withEndAction(() -> videoContainer.setElevation(0f))
+                .start();
     }
 
     // YouTube-style navigation hierarchy with live options from the actual
