@@ -192,7 +192,7 @@ public final class MobileVideoFeed {
                 Object item = videos.get(v);
                 if (item instanceof Video && !((Video) item).isChapter &&
                         !TextUtils.equals(((Video) item).videoId, excludedVideoId) &&
-                        !category.toLowerCase(Locale.ROOT).contains("chapter")) {
+                        !String.valueOf(category).toLowerCase(Locale.ROOT).contains("chapter")) {
                     next.add(new FeedItem((Video) item, category));
                 }
             }
