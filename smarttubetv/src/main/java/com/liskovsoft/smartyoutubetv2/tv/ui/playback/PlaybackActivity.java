@@ -346,6 +346,18 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override
     public void finish() {
         Log.d(TAG, "Finishing activity...");
+        if (MobileUi.isHandheld(this)) {
+            // Legacy SmartTube TV finish() deliberately re-enters PiP and
+            // blocks destruction. On a phone the X on a floating window
+            // instead means STOP: no invisible playback or stale notification.
+            if (!mMobileAudioOnly && mPlaybackFragment != null) {
+                mPlaybackFragment.setPlayWhenReady(false);
+                mPlaybackFragment.keepMobilePlaybackInBackground(false);
+                MobilePlaybackService.stop(this);
+            }
+            super.finishReally();
+            return;
+        }
 
         //if (isBackgroundBackEnabled()) {
         //    mPlaybackFragment.blockEngine(true);
