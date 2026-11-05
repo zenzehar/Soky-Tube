@@ -21,6 +21,10 @@ import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.BrowsePresenter;
+import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
+import com.liskovsoft.mediaserviceinterfaces.oauth.Account;
+import com.bumptech.glide.Glide;
+import android.text.TextUtils;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.LeanbackActivity;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
@@ -34,6 +38,9 @@ public class BrowseActivity extends LeanbackActivity {
     private View mMobileMain;
     private TextView mMobileTitle;
     private MobileYouPage mMobileYou;
+    private TextView mYouTabInitial;
+    private ImageView mYouTabPicture;
+    private MediaServiceManager.AccountChangeListener mAccountListener;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -57,6 +64,7 @@ public class BrowseActivity extends LeanbackActivity {
         if (!MobileUi.isHandheld(this)) return;
         MobileSystemBars.ensure(this, true);
         if (mMobileYou != null) mMobileYou.onResume();
+        updateYouTabAvatar();
         // Visible after a crash/relaunch without requiring adb or special access.
         String report = MainApplication.consumeMobileCrashReport(this);
         if (report == null) return;
@@ -169,6 +177,9 @@ public class BrowseActivity extends LeanbackActivity {
         mMobileBottomBar.bringToFront();
         applyWindowSizing();
         if (mMobileBottomBar.getChildCount() > 0) highlightMobileTab(mMobileBottomBar.getChildAt(0));
+        mAccountListener = account -> runOnUiThread(this::updateYouTabAvatar);
+        MediaServiceManager.instance().addAccountListener(mAccountListener);
+        updateYouTabAvatar();
     }
 
     private int ViewGroupHeight() { return dp(52); }
@@ -188,10 +199,30 @@ public class BrowseActivity extends LeanbackActivity {
         LinearLayout column = new LinearLayout(this);
         column.setOrientation(LinearLayout.VERTICAL);
         column.setGravity(Gravity.CENTER);
-        ImageView iconView = new ImageView(this);
-        iconView.setImageResource(image);
-        iconView.setColorFilter(0xFF202124);
-        column.addView(iconView, new LinearLayout.LayoutParams(dp(26), dp(26)));
+        if ("You".equals(title)) {
+            FrameLayout avatar = new FrameLayout(this);
+            mYouTabInitial = new TextView(this);
+            mYouTabInitial.setGravity(Gravity.CENTER);
+            mYouTabInitial.setTextColor(Color.WHITE);
+            mYouTabInitial.setTextSize(13);
+            mYouTabInitial.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            mYouTabInitial.setText("?");
+            GradientDrawable round = new GradientDrawable();
+            round.setShape(GradientDrawable.OVAL);
+            round.setColor(0xFF006359);
+            mYouTabInitial.setBackground(round);
+            avatar.addView(mYouTabInitial, new FrameLayout.LayoutParams(-1, -1));
+            mYouTabPicture = new ImageView(this);
+            mYouTabPicture.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            mYouTabPicture.setVisibility(View.GONE);
+            avatar.addView(mYouTabPicture, new FrameLayout.LayoutParams(-1, -1));
+            column.addView(avatar, new LinearLayout.LayoutParams(dp(27), dp(27)));
+        } else {
+            ImageView iconView = new ImageView(this);
+            iconView.setImageResource(image);
+            iconView.setColorFilter(0xFF202124);
+            column.addView(iconView, new LinearLayout.LayoutParams(dp(26), dp(26)));
+        }
         TextView label = new TextView(this);
         label.setText(title);
         label.setTextColor(0xFF202124);
@@ -215,12 +246,29 @@ public class BrowseActivity extends LeanbackActivity {
             if (!(view instanceof LinearLayout)) continue;
             LinearLayout tab = (LinearLayout) view;
             boolean active = view == selected;
-            ImageView tabIcon = (ImageView) tab.getChildAt(0);
+            View tabIcon = tab.getChildAt(0);
             TextView tabText = (TextView) tab.getChildAt(1);
             int ink = active ? 0xFF111111 : 0xFF707070;
-            tabIcon.setColorFilter(ink);
+            if (tabIcon instanceof ImageView)
+                ((ImageView) tabIcon).setColorFilter(ink);
             tabText.setTextColor(ink);
             tabText.setTypeface(Typeface.DEFAULT, active ? Typeface.BOLD : Typeface.NORMAL);
+        }
+    }
+
+    private void updateYouTabAvatar() {
+        if (mYouTabInitial == null || mYouTabPicture == null) return;
+        Account account = MediaServiceManager.instance().getSelectedAccount();
+        String name = account != null ? account.getName() : null;
+        mYouTabInitial.setText(!TextUtils.isEmpty(name)
+                ? name.substring(0, 1).toUpperCase(java.util.Locale.getDefault()) : "?");
+        String image = account != null ? account.getAvatarImageUrl() : null;
+        if (!TextUtils.isEmpty(image)) {
+            mYouTabPicture.setVisibility(View.VISIBLE);
+            Glide.with(mYouTabPicture).load(image).circleCrop().into(mYouTabPicture);
+        } else {
+            Glide.with(mYouTabPicture).clear(mYouTabPicture);
+            mYouTabPicture.setVisibility(View.GONE);
         }
     }
 
@@ -239,6 +287,7 @@ public class BrowseActivity extends LeanbackActivity {
 
     private void showYouPage() {
         if (mMobileYou == null) return;
+        updateYouTabAvatar();
         mMobileYou.show();
         if (mMobileMain != null) mMobileMain.setVisibility(View.GONE);
         if (mMobileToolbar != null) mMobileToolbar.setVisibility(View.GONE);
@@ -305,6 +354,10 @@ public class BrowseActivity extends LeanbackActivity {
         if (mMobileYou != null) {
             mMobileYou.destroy();
             mMobileYou = null;
+        }
+        if (mAccountListener != null) {
+            MediaServiceManager.instance().removeAccountListener(mAccountListener);
+            mAccountListener = null;
         }
         super.onDestroy();
     }
