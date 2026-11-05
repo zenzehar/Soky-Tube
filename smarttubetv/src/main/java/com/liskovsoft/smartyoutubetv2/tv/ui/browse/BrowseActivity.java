@@ -256,6 +256,6 @@ public class BrowseActivity extends LeanbackActivity {
         int browseTheme = MainUIData.instance(this).getColorScheme().browseThemeResId;
         if (browseTheme > 0) setTheme(browseTheme);
         if (MobileUi.isHandheld(this))
-            getTheme().applyStyle(R.style.App_Theme_SokyMobile_SafeArea, true);
+            getTheme().applyStyle(R.style.SokyMobileSafeAreaOverlay, true);
     }
 }
