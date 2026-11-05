@@ -10,6 +10,7 @@ on:
       - 'feature/mobile-v7-youtube-settings-pip-media-*'
       - 'feature/mobile-v7-4-*'
       - 'fix/mobile-v7-5-*'
+      - 'fix/mobile-v7-6-*'
   workflow_dispatch:
 
 concurrency:
@@ -51,6 +52,9 @@ jobs:
       - name: Test PiP dismiss and fullscreen lifecycle
         run: |
           ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobilePipLifecyclePolicyTest"
+      - name: Test full-screen PiP morph geometry
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobilePipMorphGeometryTest"
       - name: Build installable debug-signed mobile APK
         run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
@@ -71,8 +75,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-5-pip-lifecycle-20261105 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.5 - PiP Close Stops Playback and Browse Stays Open (5 Nov 2026)" \
-            --notes "v7.5: track real Android PiP lifecycle; stop and release ExoPlayer/media service when the floating window is dismissed even if isFinishing=false; open the existing browse task only after PiP is confirmed active; move the actual video thumbnail toward the bottom-right while dragging using stable raw touch coordinates; use Android singleTask launch mode on mobile, preserve TV mode and v7.4 features. Automated tests pass required before release; physical phone confirmation pending." \
+          gh release create mobile-preview-v7-6-fullscreen-pip-morph-20261105 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.6 - Full-Screen Bottom-Right PiP Morph (5 Nov 2026)" \
+            --notes "v7.6: morph the ACTUAL big video toward bottom-right of the entire physical phone display, not the original video window; account for navigation-bar insets; lift the scaled player above the related-video panel and disable ancestor clipping; pass the transformed screen-space bounds to Android as the PiP source; avoid a competing reverse animation after Android takes over. Retains v7.5 browse and close-to-stop behaviours. Handheld-only, physical device verification required." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-5-pip-lifecycle-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-6-fullscreen-pip-morph-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber

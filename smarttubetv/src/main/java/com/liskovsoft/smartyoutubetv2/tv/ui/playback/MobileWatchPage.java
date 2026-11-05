@@ -297,7 +297,8 @@ final class MobileWatchPage {
     void setPipMode(boolean pip) {
         inPip = pip;
         touchControls.setVisible(false);
-        touchControls.resetPipTransform();
+        if (pip) touchControls.finishPipHandoff();
+        else touchControls.resetPipTransform();
         applyLayout();
     }
 
