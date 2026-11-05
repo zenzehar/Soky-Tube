@@ -105,6 +105,8 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
             if (mMainPresenter != null) mMainPresenter.onVideoItemClicked(video);
         }, true);
         mMobileFeed.setBottomInsetDp(16);
+        mMobileFeed.setOnRefresh(() ->
+                BrowsePresenter.instance(requireContext()).refresh(false));
         mMobileFeed.setOnVideoVisible(video -> {
             if (video == null || mVideoGroupAdapters == null || mMainPresenter == null) return;
             for (VideoGroupObjectAdapter group : mVideoGroupAdapters.values()) {

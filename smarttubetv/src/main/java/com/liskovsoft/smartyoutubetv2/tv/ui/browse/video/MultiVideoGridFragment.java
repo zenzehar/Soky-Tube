@@ -2,7 +2,11 @@ package com.liskovsoft.smartyoutubetv2.tv.ui.browse.video;
 
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.LayoutInflater;
+import android.widget.FrameLayout;
 import android.widget.Toast;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 
 import androidx.annotation.Nullable;
 import androidx.leanback.widget.ClassPresenterSelector;
@@ -53,6 +57,7 @@ public class MultiVideoGridFragment extends MultiGridFragment implements VideoSe
     private int mSelectedItemIndex2 = -1;
     private Video mSelectedItem1;
     private float mVideoGridScale;
+    private MobileChannelsPanel mMobileChannels;
     private final Runnable mRestore1Task = this::restorePosition1;
 
     @Override
@@ -72,6 +77,33 @@ public class MultiVideoGridFragment extends MultiGridFragment implements VideoSe
         if (getMainFragmentAdapter().getFragmentHost() != null) {
             getMainFragmentAdapter().getFragmentHost().notifyDataReady(getMainFragmentAdapter());
         }
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup parent, Bundle state) {
+        View original = super.onCreateView(inflater, parent, state);
+        if (!MobileUi.isHandheld(requireContext())) return original;
+        FrameLayout layout = new FrameLayout(requireContext());
+        layout.setBackgroundColor(android.graphics.Color.WHITE);
+        // Retain the TV grids only as lifecycle/data containers. On a phone,
+        // render one full-width video feed with a channel picker above it.
+        layout.addView(original, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        original.setVisibility(View.INVISIBLE);
+        mMobileChannels = new MobileChannelsPanel(requireContext(),
+                channel -> mMainPresenter.onVideoItemSelected(channel),
+                video -> mMainPresenter.onVideoItemClicked(video),
+                () -> BrowsePresenter.instance(requireContext()).refresh(false));
+        layout.addView(mMobileChannels, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        mMobileChannels.showChannels(mGridAdapter1);
+        mMobileChannels.showVideos(mGridAdapter2);
+        return layout;
+    }
+
+    @Override public void onDestroyView() {
+        mMobileChannels = null;
+        super.onDestroyView();
     }
 
     @Override
@@ -132,6 +164,9 @@ public class MultiVideoGridFragment extends MultiGridFragment implements VideoSe
             freeze1(true);
             updateGroup1(group);
             freeze1(false);
+            if (mMobileChannels != null) mMobileChannels.post(() -> {
+                if (mMobileChannels != null) mMobileChannels.showChannels(mGridAdapter1);
+            });
         } else if (group.getPosition() == 1) {
             int action = group.getAction();
 
@@ -149,6 +184,9 @@ public class MultiVideoGridFragment extends MultiGridFragment implements VideoSe
             freeze2(true);
             updateGroup2(group);
             freeze2(false);
+            if (mMobileChannels != null) mMobileChannels.post(() -> {
+                if (mMobileChannels != null) mMobileChannels.showVideos(mGridAdapter2);
+            });
         }
     }
 

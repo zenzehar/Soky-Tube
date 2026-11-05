@@ -106,8 +106,14 @@ final class MobileSectionsDrawer {
                     grid.setLayoutParams(gridLayout);
                 }
                 int pad = MobileUi.dp(fragment.requireContext(), 8);
-                grid.setPadding(pad, pad, pad, pad);
-                grid.setClipToPadding(false);
+                grid.setPadding(pad, pad, pad, 0);
+                grid.setClipToPadding(true);
+                // Suppress the TV grid's long over-scroll region below Settings.
+                grid.setOverScrollMode(View.OVER_SCROLL_NEVER);
+                grid.setVerticalFadingEdgeEnabled(false);
+                // A new drawer opening always begins at the first real section
+                // instead of preserving an offscreen TV focus/alignment position.
+                grid.scrollToPosition(0);
             }
         }
     }

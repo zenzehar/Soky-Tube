@@ -24,6 +24,7 @@ import androidx.leanback.widget.ObjectAdapter;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.bumptech.glide.Glide;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
@@ -48,6 +49,9 @@ public final class MobileVideoFeed {
     private final Context context;
     private final LinearLayout root;
     private final RecyclerView list;
+    private final SwipeRefreshLayout swipeRefresh;
+    private Runnable onRefresh;
+    private String excludedVideoId;
     private final GridLayoutManager gridLayoutManager;
     private final LinearLayout chipsRow;
     private final HorizontalScrollView chipsScroll;
@@ -109,7 +113,19 @@ public final class MobileVideoFeed {
         list.setPadding(dp(6), 0, dp(6), 0);
         root.setClipChildren(true);
         root.setClipToPadding(true);
-        root.addView(list, new LinearLayout.LayoutParams(
+        // Native Android spring-style pull-to-refresh. Interception occurs only
+        // when the list is at its top; ordinary flicks and nested scrolling stay native.
+        swipeRefresh = new SwipeRefreshLayout(context);
+        swipeRefresh.setColorSchemeColors(0xFFFF173B, 0xFF222222);
+        swipeRefresh.setOnChildScrollUpCallback((parent, child) ->
+                list.canScrollVertically(-1));
+        swipeRefresh.setOnRefreshListener(() -> {
+            if (onRefresh != null) onRefresh.run();
+            swipeRefresh.postDelayed(() -> swipeRefresh.setRefreshing(false), 850);
+        });
+        swipeRefresh.addView(list, new SwipeRefreshLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        root.addView(swipeRefresh, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         // One full-width thumbnail on portrait phones, two on wide phones and
         // tablets, three on larger tablets. Reflow when the window is resized,
@@ -138,6 +154,15 @@ public final class MobileVideoFeed {
     private int dp(float value) { return MobileUi.dp(context, value); }
     public View getView() { return root; }
     public void setOnVideoVisible(OnVideoVisible callback) { onVideoVisible = callback; }
+    public void setOnRefresh(Runnable listener) {
+        onRefresh = listener;
+        swipeRefresh.setEnabled(listener != null);
+    }
+    public void setExcludedVideoId(String id) {
+        if (TextUtils.equals(excludedVideoId, id)) return;
+        excludedVideoId = id;
+        applyFilter();
+    }
 
     public void setBottomInsetDp(int bottomDp) {
         list.setPadding(0, 0, 0, dp(bottomDp));
@@ -165,7 +190,11 @@ public final class MobileVideoFeed {
             if (videos == null) continue;
             for (int v = 0; v < videos.size(); v++) {
                 Object item = videos.get(v);
-                if (item instanceof Video) next.add(new FeedItem((Video) item, category));
+                if (item instanceof Video && !((Video) item).isChapter &&
+                        !TextUtils.equals(((Video) item).videoId, excludedVideoId) &&
+                        !category.toLowerCase(Locale.ROOT).contains("chapter")) {
+                    next.add(new FeedItem((Video) item, category));
+                }
             }
         }
         setItems(next);
@@ -246,7 +275,10 @@ public final class MobileVideoFeed {
     private void applyFilter() {
         adapter.displayed.clear();
         for (FeedItem item : allVideos) {
-            if (filter.equals("All") || filter.equals(item.category)) adapter.displayed.add(item);
+            if (!item.video.isChapter && !TextUtils.equals(item.video.videoId, excludedVideoId) &&
+                    (filter.equals("All") || filter.equals(item.category))) {
+                adapter.displayed.add(item);
+            }
         }
         adapter.notifyDataSetChanged();
     }
