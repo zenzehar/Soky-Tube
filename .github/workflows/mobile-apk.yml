@@ -14,6 +14,7 @@ on:
       - 'fix/mobile-v7-7-*'
       - 'feature/mobile-v7-8-*'
       - 'fix/mobile-v7-9-*'
+      - 'fix/mobile-v7-10-*'
   workflow_dispatch:
 
 concurrency:
@@ -64,6 +65,9 @@ jobs:
       - name: Test lock screen and Home-to-PiP lifecycle
         run: |
           ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileScreenTransitionPolicyTest"
+      - name: Test exact double-tap seeking and boundary clamping
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileDoubleTapSeekPolicyTest"
       - name: Build installable debug-signed mobile APK
         run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
@@ -84,8 +88,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-9-auto-pip-lock-wake-20261106 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.9 - Auto PiP, Correct Phone Lock Screen and Wake Video (6 Nov 2026)" \
-            --notes "v7.9: automatic Home/Recents to system PiP from real ExoPlayer playback-state readiness, preserve original player when system auto-enters; disable PiP on lock and override inherited showWhenLocked TV manifest on phones; keep lockscreen visible and restore video output surface after unlock without seek/restart or audio interruption. Adds Home vs power-button/keyguard and wake-surface state regression tests. Retains v7.8 You tab; TV mode untouched. Requires physical phone verification." \
+          gh release create mobile-preview-v7-10-mobile-signin-touch-seek-20261107 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.10 - Phone Sign-In, Large Controls and Double-Tap Effects (7 Nov 2026)" \
+            --notes "v7.10: replace QR-first TV-like login on handheld with phone browser-first secure verification code flow and optional QR for another device, copy code on tap, preserve original account polling/auth backend; enlarge touch player controls to 54-70 dp targets and responsive compact 56 dp play; add original YouTube-like left/right curved shaded double-tap ±10-second seek feedback with animated arrows and seconds, avoid first-tap control flicker. All mobile changes only, retain v7.9 PiP/lockscreen recovery and v7.8 You tab. Physical phone tests still required." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-9-auto-pip-lock-wake-20261106 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-10-mobile-signin-touch-seek-20261107 dist/*.apk dist/SHA256SUMS.txt --clobber

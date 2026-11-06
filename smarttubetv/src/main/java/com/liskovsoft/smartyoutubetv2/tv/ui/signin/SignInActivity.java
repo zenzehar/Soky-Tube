@@ -4,11 +4,14 @@ import android.os.Bundle;
 import androidx.leanback.app.GuidedStepSupportFragment;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.LeanbackActivity;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
+import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileSystemBars;
+import com.liskovsoft.smartyoutubetv2.tv.R;
 
 public class SignInActivity extends LeanbackActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (MobileUi.isHandheld(this)) MobileSystemBars.install(this, true);
 
         if (null == savedInstanceState) {
             if (MobileUi.isHandheld(this)) {
@@ -21,6 +24,11 @@ public class SignInActivity extends LeanbackActivity {
                 GuidedStepSupportFragment.addAsRoot(this, new SignInFragment(), android.R.id.content);
             }
         }
+    }
+
+    @Override protected void initTheme() {
+        if (MobileUi.isHandheld(this))
+            getTheme().applyStyle(R.style.SokyMobileSafeAreaOverlay, true);
     }
 
     @Override
