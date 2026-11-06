@@ -10,6 +10,8 @@
         <activity
             android:name="com.liskovsoft.smartyoutubetv2.tv.ui.playback.PlaybackActivity"
             android:launchMode="singleTask"
-            tools:replace="android:launchMode" />
+            android:showWhenLocked="false"
+            android:turnScreenOn="false"
+            tools:replace="android:launchMode,android:showWhenLocked" />
     </application>
 </manifest>

@@ -13,6 +13,7 @@ on:
       - 'fix/mobile-v7-6-*'
       - 'fix/mobile-v7-7-*'
       - 'feature/mobile-v7-8-*'
+      - 'fix/mobile-v7-9-*'
   workflow_dispatch:
 
 concurrency:
@@ -60,6 +61,9 @@ jobs:
       - name: Test finger drag, flick and phone safe areas
         run: |
           ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobilePipDragMathTest" --tests "*MobileSystemBarsTest"
+      - name: Test lock screen and Home-to-PiP lifecycle
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileScreenTransitionPolicyTest"
       - name: Build installable debug-signed mobile APK
         run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
@@ -80,8 +84,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-8-you-tab-20261105 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.8 - YouTube-Like You Tab with Real History and Playlists (5 Nov 2026)" \
-            --notes "v7.8: dedicated handheld You page based on official YouTube layout: large signed-in account identity and avatar, account switching, Google Account action, horizontal real History and Playlists from original YouTube service, contextual menu and signed-in/out states; avatar shown in bottom You tab. Compatible with existing app history/playlist and video actions, pull-to-refresh. Keeps v7.7 finger PiP, safe-area and crash fixes; TV UI unchanged. Device/account testing pending." \
+          gh release create mobile-preview-v7-9-auto-pip-lock-wake-20261106 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.9 - Auto PiP, Correct Phone Lock Screen and Wake Video (6 Nov 2026)" \
+            --notes "v7.9: automatic Home/Recents to system PiP from real ExoPlayer playback-state readiness, preserve original player when system auto-enters; disable PiP on lock and override inherited showWhenLocked TV manifest on phones; keep lockscreen visible and restore video output surface after unlock without seek/restart or audio interruption. Adds Home vs power-button/keyguard and wake-surface state regression tests. Retains v7.8 You tab; TV mode untouched. Requires physical phone verification." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-8-you-tab-20261105 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-9-auto-pip-lock-wake-20261106 dist/*.apk dist/SHA256SUMS.txt --clobber

@@ -5,6 +5,12 @@ import android.app.PictureInPictureParams;
 import android.util.Rational;
 import android.graphics.Rect;
 import android.content.Intent;
+import android.content.Context;
+import android.content.IntentFilter;
+import android.content.BroadcastReceiver;
+import android.app.KeyguardManager;
+import android.os.PowerManager;
+import android.view.WindowManager;
 import android.view.View;
 import android.os.Build;
 import android.os.Bundle;
@@ -48,6 +54,36 @@ public class PlaybackActivity extends LeanbackActivity {
     private boolean mMobilePipSessionActive;
     private boolean mOpenBrowseAfterPip;
     private boolean mBrowseLaunchedForPip;
+    private boolean mMobileScreenOff;
+    private boolean mMobileUnlockSurfacePending;
+    private boolean mMobileInForeground;
+    private int mMobileWakeRepairAttempts;
+    private boolean mMobileScreenReceiverRegistered;
+    private final BroadcastReceiver mMobileScreenReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            String action = intent != null ? intent.getAction() : null;
+            if (Intent.ACTION_SCREEN_OFF.equals(action)) {
+                // A power-button lock is NOT a user request for PiP. If video
+                // audio is allowed to continue, keep its decoder alive, but
+                // never let the watch Activity appear over the keyguard.
+                mMobileScreenOff = true;
+                mMobileUnlockSurfacePending = true;
+                mMobileWakeRepairAttempts = 0;
+                mOpenBrowseAfterPip = false;
+                if (mPlaybackFragment != null && mPlaybackFragment.getPlayWhenReady()) {
+                    mPlaybackFragment.keepMobilePlaybackInBackground(true);
+                    MobilePlaybackService.start(PlaybackActivity.this);
+                }
+                updateMobilePipParams(); // setAutoEnterEnabled(false)
+            } else if (Intent.ACTION_USER_PRESENT.equals(action)) {
+                // Screen on is NOT sufficient: wait for the real keyguard
+                // unlock (or an already-unlocked device) before surface repair.
+                mMobileScreenOff = false;
+                scheduleMobileSurfaceRecovery();
+                updateMobilePipParams();
+            }
+        }
+    };
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -62,14 +98,29 @@ public class PlaybackActivity extends LeanbackActivity {
             mPlaybackFragment = (PlaybackFragment) fragment;
         }
         if (mobile && mPlaybackFragment != null) mMobileWatch = new MobileWatchPage(this, mPlaybackFragment);
-        if (mobile) com.liskovsoft.smartyoutubetv2.tv.ui.main.MainApplication.setMobilePlaybackPhase("playback screen attached");
+        if (mobile) {
+            // Inherited TV manifests/windows can bypass the phone's lock UI.
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
+                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD |
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
+            if (Build.VERSION.SDK_INT >= 27) {
+                setShowWhenLocked(false);
+                setTurnScreenOn(false);
+            }
+            mMobileScreenOff = !isMobileScreenInteractive();
+            registerMobileScreenReceiver();
+            com.liskovsoft.smartyoutubetv2.tv.ui.main.MainApplication
+                    .setMobilePlaybackPhase("playback screen attached");
+        }
     }
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus && MobileUi.isHandheld(this) && !isInPipMode() &&
-                getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE)
-            MobileSystemBars.ensure(this, false);
+        if (hasFocus && MobileUi.isHandheld(this) && !isInPipMode()) {
+            if (getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE)
+                MobileSystemBars.ensure(this, false);
+            scheduleMobileSurfaceRecovery();
+        }
     }
 
     @Override
@@ -86,6 +137,60 @@ public class PlaybackActivity extends LeanbackActivity {
                     mPlaybackFragment.onMobileWindowResized();
             });
         }
+    }
+
+    private boolean isMobileScreenInteractive() {
+        PowerManager manager = (PowerManager) getSystemService(POWER_SERVICE);
+        return manager == null || manager.isInteractive();
+    }
+
+    private boolean isMobileKeyguardLocked() {
+        KeyguardManager keyguard = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+        return keyguard != null && keyguard.isKeyguardLocked();
+    }
+
+    private void registerMobileScreenReceiver() {
+        if (mMobileScreenReceiverRegistered) return;
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_SCREEN_OFF);
+        filter.addAction(Intent.ACTION_USER_PRESENT);
+        try {
+            if (Build.VERSION.SDK_INT >= 33)
+                registerReceiver(mMobileScreenReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            else
+                registerReceiver(mMobileScreenReceiver, filter);
+            mMobileScreenReceiverRegistered = true;
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Mobile screen receiver unavailable: " + e.getMessage());
+        }
+    }
+
+    /** The UI may resume BEFORE the device unlock animation is finished. */
+    private void scheduleMobileSurfaceRecovery() {
+        if (!mMobileUnlockSurfacePending || !mMobileInForeground ||
+                isFinishing() || mPlaybackFragment == null) return;
+        if (!MobileScreenTransitionPolicy.shouldRestoreVideoSurface(
+                mMobileUnlockSurfacePending, isMobileScreenInteractive(),
+                isMobileKeyguardLocked(), isInPipMode(), true)) return;
+        if (!getWindow().getDecorView().hasWindowFocus()) return;
+        getWindow().getDecorView().post(() -> {
+            if (!mMobileUnlockSurfacePending || !mMobileInForeground ||
+                    !isMobileScreenInteractive() || isMobileKeyguardLocked() ||
+                    isInPipMode() || isFinishing()) return;
+            if (mPlaybackFragment.restoreMobileVideoSurfaceAfterUnlock()) {
+                mMobileUnlockSurfacePending = false;
+                mMobileWakeRepairAttempts = 0;
+                if (mMobileWatch != null) mMobileWatch.applyLayout();
+            } else if (++mMobileWakeRepairAttempts <= 5) {
+                getWindow().getDecorView().postDelayed(
+                        this::scheduleMobileSurfaceRecovery, 200);
+            }
+        });
+    }
+
+    /** Refresh prepared Android 12+ auto-PiP when ExoPlayer truly starts. */
+    void onMobilePlaybackReadinessChanged(boolean playing) {
+        if (MobileUi.isHandheld(this) && !isFinishing()) updateMobilePipParams();
     }
 
     void onMobileVideoChanged(com.liskovsoft.smartyoutubetv2.common.app.models.data.Video video) {
@@ -227,8 +332,12 @@ public class PlaybackActivity extends LeanbackActivity {
         Rect source = mobilePipSourceRect(viewport);
         if (source != null) params.setSourceRectHint(source);
         if (Build.VERSION.SDK_INT >= 31) {
-            params.setAutoEnterEnabled(!mMobileAudioOnly && mPlaybackFragment != null
-                    && mPlaybackFragment.getPlayWhenReady());
+            params.setAutoEnterEnabled(MobileScreenTransitionPolicy.shouldAutoEnterPip(
+                    mPlaybackFragment != null && mPlaybackFragment.getPlayWhenReady(),
+                    mMobileAudioOnly, !mMobileScreenOff && isMobileScreenInteractive(),
+                    isMobileKeyguardLocked(), isFinishing(), isInPipMode(),
+                    mMobilePipTransition,
+                    AppDialogPresenter.instance(this).isDialogShown()));
             params.setSeamlessResizeEnabled(true);
         }
         try {
@@ -240,6 +349,11 @@ public class PlaybackActivity extends LeanbackActivity {
 
     @Override protected void onResume() {
         super.onResume();
+        if (MobileUi.isHandheld(this)) {
+            mMobileInForeground = true;
+            if (isMobileScreenInteractive() && !isMobileKeyguardLocked())
+                mMobileScreenOff = false;
+        }
         if (MobileUi.isHandheld(this) && !isInPipMode() &&
                 getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE)
             MobileSystemBars.ensure(this, false);
@@ -253,6 +367,7 @@ public class PlaybackActivity extends LeanbackActivity {
                 mMobilePipTransition = false;
             }
             updateMobilePipParams();
+            scheduleMobileSurfaceRecovery();
         }
         // Only the compact mobile touch player is shown in the video area.
         // The TV Leanback control row remains hidden on handheld devices.
@@ -264,7 +379,8 @@ public class PlaybackActivity extends LeanbackActivity {
             // before a user dismisses the system PiP window with X/swipe.
             // A PiP that remains visible is PAUSED, not STOPPED. A PiP that
             // disappears invokes STOP; explicit background-audio mode is exempt.
-            if (MobilePipLifecyclePolicy.shouldStopOnStop(
+            if (!mMobileScreenOff && isMobileScreenInteractive() &&
+                    !isInPipMode() && MobilePipLifecyclePolicy.shouldStopOnStop(
                     mMobilePipSessionActive, mMobileAudioOnly,
                     mMobilePipTransition, isChangingConfigurations(), isFinishing())) {
                 stopClosedMobilePip();
@@ -276,6 +392,12 @@ public class PlaybackActivity extends LeanbackActivity {
     }
     @Override
     protected void onDestroy() {
+        if (mMobileScreenReceiverRegistered) {
+            try {
+                unregisterReceiver(mMobileScreenReceiver);
+            } catch (IllegalArgumentException ignored) {}
+            mMobileScreenReceiverRegistered = false;
+        }
         if (MobileUi.isHandheld(this) && !isChangingConfigurations() &&
                 !mMobileAudioOnly && mPlaybackFragment != null) {
             stopClosedMobilePip();
@@ -475,6 +597,7 @@ public class PlaybackActivity extends LeanbackActivity {
 
     @Override
     protected void onPause() {
+        mMobileInForeground = false;
         boolean hasDialogBug = AppDialogPresenter.instance(this).isDialogShown() && Build.VERSION.SDK_INT <= 23;
         boolean isScreenOff = getPlayerData().getBackgroundMode() != PlayerData.BACKGROUND_MODE_DEFAULT && Utils.isHardScreenOff(this);
 
@@ -530,6 +653,12 @@ public class PlaybackActivity extends LeanbackActivity {
             if (isInPictureInPictureMode) {
                 mMobilePipSessionActive = true;
                 mMobilePipTransition = false;
+                if (mPlaybackFragment != null) {
+                    // Android 12 may enter PiP automatically, bypassing
+                    // enterMobilePip(), so retain the SAME decoder/session.
+                    mPlaybackFragment.keepMobilePlaybackInBackground(true);
+                    MobilePlaybackService.start(this);
+                }
                 // The platform reports PiP only once it is actually active:
                 // reopen Home here, not on a fixed 180 ms assumption.
                 getWindow().getDecorView().post(this::launchBrowseOncePipIsVisible);
@@ -554,12 +683,18 @@ public class PlaybackActivity extends LeanbackActivity {
                 MobilePlaybackService.start(this);
                 return;
             }
-            if (mPlaybackFragment != null && mPlaybackFragment.getPlayWhenReady()) {
+            if (mPlaybackFragment != null &&
+                    MobileScreenTransitionPolicy.shouldAutoEnterPip(
+                            mPlaybackFragment.getPlayWhenReady(), mMobileAudioOnly,
+                            !mMobileScreenOff && isMobileScreenInteractive(),
+                            isMobileKeyguardLocked(), isFinishing(),
+                            isInPipMode(), mMobilePipTransition, false)) {
+                // User deliberately leaves via Home or Recents. Do NOT treat
+                // a power-button lock as this action.
+                mPlaybackFragment.keepMobilePlaybackInBackground(true);
                 MobilePlaybackService.start(this);
-                // Android 12+ auto-enter is smoother; older phones need an
-                // explicit entry on Home/recents gesture or hardware button.
                 if (Build.VERSION.SDK_INT < 31) enterMobilePip(false);
-                else updateMobilePipParams();
+                else updateMobilePipParams(); // prepared earlier for OS animation
             }
             return;
         }

@@ -15,6 +15,9 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewStub;
+import android.view.SurfaceView;
+import android.view.Surface;
+import android.view.TextureView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -418,6 +421,43 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         }
     }
 
+    /**
+     * Rebind only the existing decoder's VIDEO output after phone sleep.
+     * Some Android SurfaceView/TextureView devices resume audio from the old
+     * decoder while presenting the final frame of an invalidated Surface.
+     * Do not seek, prepare, pause or recreate the playing ExoPlayer.
+     *
+     * @return true if a valid visible surface was reattached.
+     */
+    boolean restoreMobileVideoSurfaceAfterUnlock() {
+        if (!MobileUi.isHandheld(getContext()) || !isAdded() ||
+                mPlayer == null || getView() == null) return false;
+        View renderer = getSurfaceView();
+        if (renderer == null || !renderer.isAttachedToWindow()) return false;
+        try {
+            if (renderer instanceof SurfaceView) {
+                Surface surface = ((SurfaceView) renderer).getHolder().getSurface();
+                if (surface == null || !surface.isValid()) return false;
+                mPlayer.clearVideoSurface();
+                mPlayer.setVideoSurface(surface);
+            } else if (renderer instanceof TextureView) {
+                TextureView texture = (TextureView) renderer;
+                if (!texture.isAvailable() || texture.getSurfaceTexture() == null)
+                    return false;
+                mPlayer.clearVideoSurface();
+                mPlayer.setVideoTextureView(texture);
+            } else {
+                return false;
+            }
+            renderer.invalidate();
+            onMobileWindowResized();
+            return true;
+        } catch (RuntimeException exception) {
+            Log.e(TAG, "Mobile video surface recovery failed: " + exception.getMessage());
+            return false;
+        }
+    }
+
     public void onPIPChanged(boolean isInPIP) {
         if (!isInPIP) {
             // Fix partially disappeared buttons after exit from PIP???
@@ -616,6 +656,18 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         mPlayer = mPlayerInitializer.createPlayer(getContext(), renderersFactory, trackSelector);
 
         mExoPlayerController.setPlayer(mPlayer);
+        if (MobileUi.isHandheld(getContext())) {
+            // API 31 auto-PiP must be configured when playback REALLY begins,
+            // not only at metadata selection before the decoder is ready.
+            mPlayer.addListener(new Player.EventListener() {
+                @Override public void onPlayerStateChanged(boolean playWhenReady, int state) {
+                    if (getActivity() instanceof PlaybackActivity) {
+                        ((PlaybackActivity) getActivity())
+                                .onMobilePlaybackReadinessChanged(playWhenReady);
+                    }
+                }
+            });
+        }
     }
 
     private void createPlayerGlue() {
@@ -1152,6 +1204,8 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     @Override
     public void setPlayWhenReady(boolean play) {
         mExoPlayerController.setPlayWhenReady(play);
+        if (getActivity() instanceof PlaybackActivity)
+            ((PlaybackActivity) getActivity()).onMobilePlaybackReadinessChanged(play);
     }
 
     @Override
