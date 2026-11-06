@@ -65,6 +65,7 @@ final class MobileTouchPlayerControls {
 
     private final TextView time;
     private final ImageButton play;
+    private final MobileDoubleTapSeekFeedback seekFeedback;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean visible = true;
     private boolean tracking;
@@ -100,22 +101,29 @@ final class MobileTouchPlayerControls {
                 new int[] {0x90000000, 0x00000000});
     }
 
-    private ImageButton button(int drawable, String description) {
+    private ImageButton button(int drawable, String description, int sizeDp) {
         ImageButton icon = new ImageButton(activity);
         icon.setImageResource(drawable);
         icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
         icon.setColorFilter(Color.WHITE);
-        icon.setPadding(dp(10), dp(10), dp(10), dp(10));
+        // Previous 48dp with 10dp padding left an icon only 28dp wide.
+        // 56-72dp native touch targets are easier to locate and operate
+        // without requiring TV-style D-pad focus.
+        int inset = dp(sizeDp >= 68 ? 15 : 11);
+        icon.setPadding(inset, inset, inset, inset);
         icon.setBackground(circle());
         icon.setContentDescription(description);
+        icon.setMinimumWidth(dp(48));
+        icon.setMinimumHeight(dp(48));
         return icon;
     }
 
-    private ImageButton addButton(LinearLayout parent, int drawable, String description, Runnable action) {
-        ImageButton b = button(drawable, description);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(48), dp(48));
-        p.setMarginStart(dp(8));
-        p.setMarginEnd(dp(8));
+    private ImageButton addButton(LinearLayout parent, int drawable, String description,
+            Runnable action, int sizeDp) {
+        ImageButton b = button(drawable, description, sizeDp);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp));
+        p.setMarginStart(dp(5));
+        p.setMarginEnd(dp(5));
         parent.addView(b, p);
         b.setOnClickListener(v -> {
             action.run();
@@ -135,19 +143,25 @@ final class MobileTouchPlayerControls {
 
         GestureDetector gestures = new GestureDetector(activity, new GestureDetector.SimpleOnGestureListener() {
             @Override public boolean onDown(MotionEvent event) { return true; }
-            @Override public boolean onSingleTapUp(MotionEvent event) {
-                // React on finger-up immediately instead of waiting for the
-                // double-tap timeout (which made phone controls feel sluggish).
+            @Override public boolean onSingleTapConfirmed(MotionEvent event) {
+                // Do not toggle the transport controls on the FIRST tap of
+                // a double-tap seek. YouTube distinguishes the two gestures.
                 setVisible(!visible);
                 return true;
             }
             @Override public boolean onDoubleTap(MotionEvent event) {
-                long duration = Math.max(0L, player.getDurationMs());
-                if (duration <= 0) return true;
-                long position = Math.max(0L, player.getPositionMs());
-                long delta = event.getX() < root.getWidth() / 2f ? -10000L : 10000L;
-                player.setPositionMs(Math.max(0L, Math.min(duration, position + delta)));
-                setVisible(true);
+                long duration = player.getDurationMs();
+                int side = MobileDoubleTapSeekPolicy.direction(
+                        event.getX(), root.getWidth());
+                long target = MobileDoubleTapSeekPolicy.target(
+                        player.getPositionMs(), duration, side);
+                if (target >= 0L) {
+                    player.setPositionMs(target);
+                    seekFeedback.show(side);
+                    // Keep existing controls hidden when they were hidden.
+                    // Only the directional seek vignette appears at the edge.
+                    scheduleDismiss();
+                }
                 return true;
             }
         });
@@ -271,26 +285,26 @@ final class MobileTouchPlayerControls {
         top.setPadding(dp(6), 0, dp(6), 0);
         top.setBackground(gradient(true));
         FrameLayout.LayoutParams topParams = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(49), Gravity.TOP);
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(56), Gravity.TOP);
         root.addView(top, topParams);
-        addButton(top, R.drawable.mobile_ic_back, "Back", activity::onBackPressed);
+        addButton(top, R.drawable.mobile_ic_back, "Back", activity::onBackPressed, 54);
         View filler = new View(activity);
         top.addView(filler, new LinearLayout.LayoutParams(0, 1, 1f));
         addButton(top, R.drawable.mobile_ic_pip, "Picture-in-picture",
-                () -> activity.enterMobilePip(true));
-        addButton(top, R.drawable.mobile_ic_settings, "Settings", this::showOptions);
+                () -> activity.enterMobilePip(true), 54);
+        addButton(top, R.drawable.mobile_ic_settings, "Settings", this::showOptions, 54);
 
         center = new LinearLayout(activity);
         center.setGravity(Gravity.CENTER);
         FrameLayout.LayoutParams middleParams = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(52), Gravity.CENTER);
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(74), Gravity.CENTER);
         root.addView(center, middleParams);
-        addButton(center, R.drawable.mobile_ic_prev, "Previous video", player::skipToPrevious);
+        addButton(center, R.drawable.mobile_ic_prev, "Previous video", player::skipToPrevious, 62);
         play = addButton(center, R.drawable.mobile_ic_pause, "Pause", () -> {
             player.setPlayWhenReady(!player.getPlayWhenReady());
             refresh();
-        });
-        addButton(center, R.drawable.mobile_ic_next, "Next video", player::skipToNext);
+        }, 70);
+        addButton(center, R.drawable.mobile_ic_next, "Next video", player::skipToNext, 62);
 
         bottom = new LinearLayout(activity);
         bottom.setOrientation(LinearLayout.VERTICAL);
@@ -372,6 +386,12 @@ final class MobileTouchPlayerControls {
                 return false;
             }
         });
+
+        // Draw above the video and transport without intercepting touch.
+        // It is invisible except for a short ±10s double-tap animation.
+        seekFeedback = new MobileDoubleTapSeekFeedback(activity);
+        root.addView(seekFeedback, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         root.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,orr,ob)-> resize(r-l,b-t));
         resize(container.getWidth(), container.getHeight());
@@ -815,6 +835,18 @@ final class MobileTouchPlayerControls {
         if (center.getChildCount() >= 3) {
             center.getChildAt(0).setVisibility(compact ? View.GONE : View.VISIBLE);
             center.getChildAt(2).setVisibility(compact ? View.GONE : View.VISIBLE);
+            // Even on a compact embedded player, the play target remains
+            // at least 56dp across. Keep the other buttons large on full video.
+            for (int i = 0; i < center.getChildCount(); i++) {
+                View child = center.getChildAt(i);
+                ViewGroup.LayoutParams target = child.getLayoutParams();
+                int size = dp(compact ? 56 : (i == 1 ? 70 : 62));
+                if (target.width != size || target.height != size) {
+                    target.width = size;
+                    target.height = size;
+                    child.setLayoutParams(target);
+                }
+            }
         }
         ViewGroup.LayoutParams params = bottom.getLayoutParams();
         int h = dp(compact ? 46 : 65);
@@ -865,5 +897,6 @@ final class MobileTouchPlayerControls {
         handler.removeCallbacks(dismiss);
         handler.removeCallbacks(progressTick);
         if (scrubPreviews != null) scrubPreviews.release();
+        if (seekFeedback != null) seekFeedback.release();
     }
 }
