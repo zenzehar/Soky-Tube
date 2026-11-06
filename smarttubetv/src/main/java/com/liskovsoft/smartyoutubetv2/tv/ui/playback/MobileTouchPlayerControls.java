@@ -831,6 +831,14 @@ final class MobileTouchPlayerControls {
         top.setVisibility(visible && !compact ? View.VISIBLE : View.GONE);
         center.setVisibility(visible ? View.VISIBLE : View.GONE);
         bottom.setVisibility(visible ? View.VISIBLE : View.GONE);
+        // Avoid overlapping the seekbar on short embedded videos while
+        // preserving the full 56dp minimum primary touch target.
+        ViewGroup.LayoutParams centerParams = center.getLayoutParams();
+        int centerHeight = dp(compact ? 58 : 74);
+        if (centerParams.height != centerHeight) {
+            centerParams.height = centerHeight;
+            center.setLayoutParams(centerParams);
+        }
         // Hide nonessential previous/next on very short embedded video frames.
         if (center.getChildCount() >= 3) {
             center.getChildAt(0).setVisibility(compact ? View.GONE : View.VISIBLE);
