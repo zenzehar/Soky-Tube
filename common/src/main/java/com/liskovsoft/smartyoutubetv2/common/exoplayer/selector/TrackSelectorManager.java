@@ -414,7 +414,22 @@ public class TrackSelectorManager implements TrackSelectorCallback {
         mRenderers[rendererIndex].isDisabled = false;
 
         MediaTrack matchedTrack = findBestMatch(track);
-        
+        // On handheld Soky Tube an audio item was explicitly tapped in one
+        // of the separate LANGUAGE/QUALITY menus. The legacy bit-rate
+        // matcher can otherwise jump into a DIFFERENT language group whose
+        // codec/bitrate happens to match. Preserve the EXACT currently
+        // available audio track selected by the user or original-audio policy.
+        // Leave all TV/other flavors and saved out-of-date presets unchanged.
+        if (rendererIndex == RENDERER_INDEX_AUDIO &&
+                "com.sokytube.mobile".equals(mContext.getPackageName()) &&
+                track.groupIndex >= 0 && track.trackIndex >= 0 &&
+                track.groupIndex < mRenderers[rendererIndex].mediaTracks.length &&
+                mRenderers[rendererIndex].mediaTracks[track.groupIndex] != null &&
+                track.trackIndex < mRenderers[rendererIndex].mediaTracks[track.groupIndex].length &&
+                mRenderers[rendererIndex].mediaTracks[track.groupIndex][track.trackIndex] == track) {
+            matchedTrack = track;
+        }
+
         setSelection(matchedTrack.rendererIndex, matchedTrack.groupIndex, matchedTrack.trackIndex);
 
         // save immediately
