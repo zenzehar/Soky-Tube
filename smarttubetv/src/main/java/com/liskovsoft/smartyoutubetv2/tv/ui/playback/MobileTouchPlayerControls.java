@@ -65,6 +65,7 @@ final class MobileTouchPlayerControls {
 
     private final TextView time;
     private final ImageButton play;
+    private final ImageButton fullscreen;
     private final MobileDoubleTapSeekFeedback seekFeedback;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean visible = true;
@@ -385,6 +386,19 @@ final class MobileTouchPlayerControls {
                 // Return false to retain genuine Android SeekBar thumb handling.
                 return false;
             }
+        });
+
+        // Always-accessible fullscreen and portrait restore, including on
+        // compact mobile video frames where the top toolbar is hidden.
+        fullscreen = button(R.drawable.mobile_ic_fullscreen, "Enter fullscreen", 54);
+        FrameLayout.LayoutParams fullscreenPos = new FrameLayout.LayoutParams(
+                dp(54), dp(54), Gravity.END | Gravity.BOTTOM);
+        fullscreenPos.rightMargin = dp(10);
+        fullscreenPos.bottomMargin = dp(68);
+        root.addView(fullscreen, fullscreenPos);
+        fullscreen.setOnClickListener(v -> {
+            activity.toggleMobileFullscreen();
+            scheduleDismiss();
         });
 
         // Draw above the video and transport without intercepting touch.
@@ -824,6 +838,13 @@ final class MobileTouchPlayerControls {
         }
     }
 
+    void setFullscreenState(boolean landscape) {
+        fullscreen.setImageResource(landscape
+                ? R.drawable.mobile_ic_fullscreen_exit : R.drawable.mobile_ic_fullscreen);
+        fullscreen.setContentDescription(landscape
+                ? "Exit fullscreen" : "Enter fullscreen");
+    }
+
     private void resize(int widthPx, int heightPx) {
         if (heightPx <= 0) return;
         boolean compact = MobileUi.compactTouchPlayer(heightPx /
@@ -831,6 +852,7 @@ final class MobileTouchPlayerControls {
         top.setVisibility(visible && !compact ? View.VISIBLE : View.GONE);
         center.setVisibility(visible ? View.VISIBLE : View.GONE);
         bottom.setVisibility(visible ? View.VISIBLE : View.GONE);
+        fullscreen.setVisibility(visible ? View.VISIBLE : View.GONE);
         // Avoid overlapping the seekbar on short embedded videos while
         // preserving the full 56dp minimum primary touch target.
         ViewGroup.LayoutParams centerParams = center.getLayoutParams();
@@ -871,6 +893,7 @@ final class MobileTouchPlayerControls {
         top.setVisibility(visible ? View.VISIBLE : View.GONE);
         center.setVisibility(visible ? View.VISIBLE : View.GONE);
         bottom.setVisibility(visible ? View.VISIBLE : View.GONE);
+        fullscreen.setVisibility(visible ? View.VISIBLE : View.GONE);
         if (visible) {
             resize(root.getWidth(), root.getHeight());
             refresh();
