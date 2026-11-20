@@ -15,6 +15,7 @@ on:
       - 'feature/mobile-v7-8-*'
       - 'fix/mobile-v7-9-*'
       - 'fix/mobile-v7-10-*'
+      - 'fix/mobile-v7-11-*'
   workflow_dispatch:
 
 concurrency:
@@ -68,6 +69,9 @@ jobs:
       - name: Test exact double-tap seeking and boundary clamping
         run: |
           ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileDoubleTapSeekPolicyTest"
+      - name: Test original and dubbed audio grouping
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileAudioTrackPolicyTest"
       - name: Build installable debug-signed mobile APK
         run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
@@ -88,8 +92,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-10-mobile-signin-touch-seek-20261107 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.10 - Phone Sign-In, Large Controls and Double-Tap Effects (7 Nov 2026)" \
-            --notes "v7.10: replace QR-first TV-like login on handheld with phone browser-first secure verification code flow and optional QR for another device, copy code on tap, preserve original account polling/auth backend; enlarge touch player controls to 54-70 dp targets and responsive compact 56 dp play; add original YouTube-like left/right curved shaded double-tap ±10-second seek feedback with animated arrows and seconds, avoid first-tap control flicker. All mobile changes only, retain v7.9 PiP/lockscreen recovery and v7.8 You tab. Physical phone tests still required." \
+          gh release create mobile-preview-v7-11-stability-audio-auto-20261120 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.11 - Fullscreen, PiP Close, News Refresh, Android Auto and Original Audio (20 Nov 2026)" \
+            --notes "v7.11: add accessible fullscreen/exit fullscreen touch toggle; restore ExoPlayer video surface after rotation instead of allowing frozen/black video with live audio; stop PiP media service/decoder on X even if onStop or finishing state is delayed; mobile News refresh requests a new provider observable and preserves loading spinner until data; Android Auto has non-empty audio browser root and handles steering-wheel media-button intents with existing session; audio language and audio bitrate/codec are separate choices, with explicit original audio automatically preferred and exact chosen audio track preserved on mobile. Android TV unaffected by mobile-specific behaviour. OEM Android Auto, rotation and original-language flags require physical testing; upstream News recommendation freshness is not guaranteed." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-10-mobile-signin-touch-seek-20261107 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-11-stability-audio-auto-20261120 dist/*.apk dist/SHA256SUMS.txt --clobber
