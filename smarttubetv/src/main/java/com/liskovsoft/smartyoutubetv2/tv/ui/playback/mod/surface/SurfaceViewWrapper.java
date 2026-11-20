@@ -59,6 +59,19 @@ public class SurfaceViewWrapper implements SurfaceWrapper {
     }
 
     @Override
+    public boolean refreshSurfaceBinding() {
+        SurfaceHolder holder = mVideoSurface.getHolder();
+        if (mState != SURFACE_CREATED || holder == null ||
+                holder.getSurface() == null || !holder.getSurface().isValid() ||
+                mMediaPlaybackCallback == null || !mVideoSurface.isAttachedToWindow())
+            return false;
+        // Restore through LeanbackPlayerAdapter, not a second unmanaged
+        // SimpleExoPlayer.setVideoSurface(...) binding.
+        mMediaPlaybackCallback.surfaceCreated(holder);
+        return true;
+    }
+
+    @Override
     public View getSurfaceView() {
         return mVideoSurface;
     }
