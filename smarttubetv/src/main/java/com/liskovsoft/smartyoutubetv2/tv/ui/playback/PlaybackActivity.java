@@ -168,7 +168,7 @@ public class PlaybackActivity extends LeanbackActivity {
 
     private void scheduleMobileRotationVideoRecovery(int attempt) {
         if (!mMobileRotationRecoveryPending) return;
-        if (attempt > 9) {
+        if (attempt > MobileRotationSurfacePolicy.MAX_ATTEMPTS) {
             mMobileRotationRecoveryPending = false;
             Log.w(TAG, "Mobile fullscreen output unavailable after layout retries");
             return;
@@ -181,7 +181,8 @@ public class PlaybackActivity extends LeanbackActivity {
                     isMobileKeyguardLocked()) return;
             // A resized SurfaceTexture can arrive after onConfigurationChanged.
             // Wait for actual video-frame dimensions before binding it.
-            if (!mMobileRotationFrameMeasured && attempt < 5) {
+            if (MobileRotationSurfacePolicy.waitForMeasuredFrame(
+                    mMobileRotationFrameMeasured, attempt)) {
                 scheduleMobileRotationVideoRecovery(attempt + 1);
                 return;
             }
