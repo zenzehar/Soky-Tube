@@ -62,6 +62,8 @@ public class PlaybackActivity extends LeanbackActivity {
     private boolean mMobileRotationRecoveryPending;
     private boolean mMobileRotationFrameMeasured;
     private int mMobileRotationGeneration;
+    private long mMobileRotationMeasuredAtMs;
+    private boolean mMobileRotationSurfaceBound;
     private final BroadcastReceiver mMobileScreenReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             String action = intent != null ? intent.getAction() : null;
@@ -140,6 +142,8 @@ public class PlaybackActivity extends LeanbackActivity {
                 MobileSystemBars.ensure(this, false);
             mMobileRotationRecoveryPending = !isInPipMode();
             mMobileRotationFrameMeasured = false;
+            mMobileRotationMeasuredAtMs = android.os.SystemClock.uptimeMillis();
+            mMobileRotationSurfaceBound = false;
             mMobileRotationGeneration++;
             if (mMobileWatch != null) mMobileWatch.applyLayout();
             // Rebind only AFTER the responsive 16:9 container has measured
@@ -163,6 +167,11 @@ public class PlaybackActivity extends LeanbackActivity {
     void onMobileVideoFrameLaidOut(int width, int height) {
         if (!mMobileRotationRecoveryPending || width <= 0 || height <= 0) return;
         mMobileRotationFrameMeasured = true;
+        mMobileRotationMeasuredAtMs = android.os.SystemClock.uptimeMillis();
+        mMobileRotationSurfaceBound = false;
+        // Cancel the older configuration-only timer: wait for the measured
+        // fullscreen frame before trying to reattach the player output.
+        mMobileRotationGeneration++;
         scheduleMobileRotationVideoRecovery(0);
     }
 
@@ -186,11 +195,27 @@ public class PlaybackActivity extends LeanbackActivity {
                 scheduleMobileRotationVideoRecovery(attempt + 1);
                 return;
             }
-            if (mPlaybackFragment.restoreMobileVideoSurfaceAfterUnlock()) {
+            long updatedFrameMs = mPlaybackFragment.lastMobileVideoFrameUptimeMs();
+            if (MobileRotationSurfacePolicy.hasNewFrame(
+                    updatedFrameMs, mMobileRotationMeasuredAtMs)) {
+                // This proves the decoder's output was visibly composited on
+                // the NEW fullscreen texture, not merely a still-valid old
+                // surface. Stop retries as soon as the first frame arrives.
                 mMobileRotationRecoveryPending = false;
-            } else {
-                scheduleMobileRotationVideoRecovery(attempt + 1);
+                return;
             }
+            if (MobileRotationSurfacePolicy.shouldRebind(attempt)) {
+                mMobileRotationSurfaceBound |=
+                        mPlaybackFragment.restoreMobileVideoSurfaceAfterUnlock();
+            }
+            // A paused video may not produce a new texture frame until play.
+            if (mMobileRotationSurfaceBound && !mPlaybackFragment.getPlayWhenReady()) {
+                mMobileRotationRecoveryPending = false;
+                return;
+            }
+            // Wait for a rendered frame, with just a few spaced rebinds to
+            // avoid repeatedly interrupting a slow hardware decoder.
+            scheduleMobileRotationVideoRecovery(attempt + 1);
         }, attempt == 0 ? 100L : 170L);
     }
 
