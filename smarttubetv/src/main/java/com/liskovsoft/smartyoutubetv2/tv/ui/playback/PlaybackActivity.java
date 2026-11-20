@@ -59,6 +59,9 @@ public class PlaybackActivity extends LeanbackActivity {
     private boolean mMobileInForeground;
     private int mMobileWakeRepairAttempts;
     private boolean mMobileScreenReceiverRegistered;
+    private boolean mMobileRotationRecoveryPending;
+    private boolean mMobileRotationFrameMeasured;
+    private int mMobileRotationGeneration;
     private final BroadcastReceiver mMobileScreenReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             String action = intent != null ? intent.getAction() : null;
@@ -135,6 +138,9 @@ public class PlaybackActivity extends LeanbackActivity {
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
             if (newConfig.orientation != Configuration.ORIENTATION_LANDSCAPE && !isInPipMode())
                 MobileSystemBars.ensure(this, false);
+            mMobileRotationRecoveryPending = !isInPipMode();
+            mMobileRotationFrameMeasured = false;
+            mMobileRotationGeneration++;
             if (mMobileWatch != null) mMobileWatch.applyLayout();
             // Rebind only AFTER the responsive 16:9 container has measured
             // its new dimensions, otherwise controls use the old orientation.
@@ -150,14 +156,41 @@ public class PlaybackActivity extends LeanbackActivity {
         }
     }
 
+    /** A configuration event precedes the actual fullscreen frame resize.
+     * Do not treat the OLD surface being valid as proof that the video has
+     * recovered before the new layout was measured.
+     */
+    void onMobileVideoFrameLaidOut(int width, int height) {
+        if (!mMobileRotationRecoveryPending || width <= 0 || height <= 0) return;
+        mMobileRotationFrameMeasured = true;
+        scheduleMobileRotationVideoRecovery(0);
+    }
+
     private void scheduleMobileRotationVideoRecovery(int attempt) {
-        if (attempt > 5) return;
+        if (!mMobileRotationRecoveryPending) return;
+        if (attempt > 9) {
+            mMobileRotationRecoveryPending = false;
+            Log.w(TAG, "Mobile fullscreen output unavailable after layout retries");
+            return;
+        }
+        final int generation = mMobileRotationGeneration;
         getWindow().getDecorView().postDelayed(() -> {
-            if (isFinishing() || isInPipMode() || mPlaybackFragment == null ||
-                    !isMobileScreenInteractive() || isMobileKeyguardLocked()) return;
-            if (!mPlaybackFragment.restoreMobileVideoSurfaceAfterUnlock())
+            if (generation != mMobileRotationGeneration ||
+                    !mMobileRotationRecoveryPending || isFinishing() || isInPipMode() ||
+                    mPlaybackFragment == null || !isMobileScreenInteractive() ||
+                    isMobileKeyguardLocked()) return;
+            // A resized SurfaceTexture can arrive after onConfigurationChanged.
+            // Wait for actual video-frame dimensions before binding it.
+            if (!mMobileRotationFrameMeasured && attempt < 5) {
                 scheduleMobileRotationVideoRecovery(attempt + 1);
-        }, attempt == 0 ? 170L : 220L);
+                return;
+            }
+            if (mPlaybackFragment.restoreMobileVideoSurfaceAfterUnlock()) {
+                mMobileRotationRecoveryPending = false;
+            } else {
+                scheduleMobileRotationVideoRecovery(attempt + 1);
+            }
+        }, attempt == 0 ? 100L : 170L);
     }
 
     private boolean isMobileScreenInteractive() {
