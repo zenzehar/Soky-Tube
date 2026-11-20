@@ -12,5 +12,9 @@ public interface SurfaceWrapper {
      * sole lifecycle owner; callers must not replace TextureView listeners.
      */
     boolean refreshSurfaceBinding();
+    /** Uptime of an actual newly composited TextureView frame (0 if none).
+     * SurfaceView does not expose this signal through the wrapper.
+     */
+    long lastVideoFrameUptimeMs();
     View getSurfaceView();
 }
