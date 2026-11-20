@@ -72,6 +72,12 @@ public class SurfaceViewWrapper implements SurfaceWrapper {
     }
 
     @Override
+    public long lastVideoFrameUptimeMs() {
+        // SurfaceView's compositor does not notify us for every frame.
+        return -1L;
+    }
+
+    @Override
     public View getSurfaceView() {
         return mVideoSurface;
     }
