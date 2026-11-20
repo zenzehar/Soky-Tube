@@ -74,6 +74,8 @@ final class MobileTouchPlayerControls {
     private boolean running = true;
     private Boolean lastMediaPlaying;
     private boolean draggingToPip;
+    private boolean mOriginalAudioApplied;
+    private long mAudioMetadataWaitingSince;
 
     private final Runnable dismiss = () -> {
         if (!tracking && player.getPlayWhenReady()) setVisible(false);
@@ -487,50 +489,155 @@ final class MobileTouchPlayerControls {
 
     private void showOptions() {
         showSheet("Settings", null,
-                new String[]{"Quality", "Playback speed", "Audio language", "Captions",
-                        "Chapters", "Comments", "Advanced options",
+                new String[]{"Quality", "Playback speed", "Audio language", "Audio quality",
+                        "Captions", "Chapters", "Comments", "Advanced options",
                         "Picture-in-picture", "Background audio"},
                 new Runnable[]{this::showQuality, this::showSpeeds, this::showAudioLanguage,
-                        this::showCaptions, this::showChapters, player::openMobileComments,
-                        this::showAdvancedOptions,
+                        this::showAudioQuality, this::showCaptions, this::showChapters,
+                        player::openMobileComments, this::showAdvancedOptions,
                         () -> activity.enterMobilePip(true),
                         activity::startMobileBackgroundAudio});
     }
 
+    /** The provider may offer several bitrates for each audio language.
+     * Keep the language list distinct from individual encoding options.
+     */
+    private List<FormatItem> mobileAudioFormats() {
+        List<FormatItem> source = player.getAudioFormats();
+        ArrayList<FormatItem> result = new ArrayList<>();
+        if (source != null) for (FormatItem track : source) {
+            if (track != null && track.getType() == FormatItem.TYPE_AUDIO &&
+                    track.getTrack() != null && track.getTrack().format != null)
+                result.add(track);
+        }
+        return result;
+    }
+
+    private String audioLabel(FormatItem item) {
+        com.google.android.exoplayer2.Format format = item.getTrack() != null
+                ? item.getTrack().format : null;
+        return format != null ? format.label : null;
+    }
+
+    private String audioGroupKey(FormatItem item) {
+        return MobileAudioTrackPolicy.groupKey(item.getLanguage(), audioLabel(item),
+                item.getFormatId());
+    }
+
+    private int audioBitrate(FormatItem item) {
+        return item.getTrack() != null && item.getTrack().format != null
+                ? Math.max(0, item.getTrack().format.bitrate) : 0;
+    }
+
     private void showAudioLanguage() {
-        List<FormatItem> tracks = player.getAudioFormats();
-        if (tracks == null || tracks.isEmpty()) {
-            android.widget.Toast.makeText(activity,
-                    "Alternative audio tracks are unavailable for this video",
+        List<FormatItem> tracks = mobileAudioFormats();
+        if (tracks.isEmpty()) {
+            android.widget.Toast.makeText(activity, "No selectable audio tracks",
                     android.widget.Toast.LENGTH_SHORT).show();
             return;
         }
+        LinkedHashMap<String, FormatItem> groups = new LinkedHashMap<>();
+        for (FormatItem track : tracks) {
+            String key = audioGroupKey(track);
+            FormatItem previous = groups.get(key);
+            if (previous == null || (track.isSelected() && !previous.isSelected()) ||
+                    (!previous.isSelected() && audioBitrate(track) > audioBitrate(previous)))
+                groups.put(key, track);
+        }
         ArrayList<String> labels = new ArrayList<>();
         ArrayList<Runnable> actions = new ArrayList<>();
-        for (FormatItem track : tracks) {
-            if (track == null) continue;
-            String language = track.getLanguage();
-            CharSequence title = track.getTitle();
-            String label = !TextUtils.isEmpty(language) ? language :
-                    title != null ? title.toString() : "Original audio";
-            if (track.isSelected()) label += "   ✓";
+        for (FormatItem track : groups.values()) {
+            String label = MobileAudioTrackPolicy.displayLanguage(
+                    track.getLanguage(), audioLabel(track), track.getFormatId());
+            boolean selected = false;
+            for (FormatItem variant : tracks) {
+                if (audioGroupKey(variant).equals(audioGroupKey(track)) && variant.isSelected()) {
+                    selected = true;
+                    break;
+                }
+            }
+            if (selected) label += "   ✓";
             labels.add(label);
-            actions.add(() -> player.setFormat(track));
+            actions.add(() -> {
+                mOriginalAudioApplied = true; // honor manual language choice
+                player.setFormat(track);
+            });
         }
-        showSheet("Audio language", "Available audio tracks from this video",
+        showSheet("Audio language",
+                "One entry per language or original/dubbed variant; choose bitrate separately",
                 labels.toArray(new String[0]), actions.toArray(new Runnable[0]));
+    }
+
+    private void showAudioQuality() {
+        List<FormatItem> tracks = mobileAudioFormats();
+        if (tracks.isEmpty()) {
+            android.widget.Toast.makeText(activity, "Audio quality unavailable",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        FormatItem selected = null;
+        for (FormatItem track : tracks) if (track.isSelected()) {selected = track; break;}
+        if (selected == null) selected = tracks.get(0);
+        final String key = audioGroupKey(selected);
+        ArrayList<FormatItem> choices = new ArrayList<>();
+        for (FormatItem track : tracks)
+            if (audioGroupKey(track).equals(key)) choices.add(track);
+        Collections.sort(choices, (a,b) -> Integer.compare(audioBitrate(b), audioBitrate(a)));
+        ArrayList<String> labels = new ArrayList<>();
+        ArrayList<Runnable> actions = new ArrayList<>();
+        for (FormatItem track : choices) {
+            com.google.android.exoplayer2.Format format = track.getTrack().format;
+            String codec = format.sampleMimeType != null ? format.sampleMimeType
+                    .replace("audio/", "") : "Audio";
+            String bitrate = format.bitrate > 0
+                    ? Math.round(format.bitrate / 1000f) + " kbps" : "Auto bitrate";
+            String channels = format.channelCount > 2
+                    ? " · " + format.channelCount + " channels" : "";
+            labels.add(bitrate + " · " + codec + channels +
+                    (track.isSelected() ? "   ✓" : ""));
+            actions.add(() -> {
+                mOriginalAudioApplied = true;
+                player.setFormat(track);
+            });
+        }
+        showSheet("Audio quality",
+                "Audio encoding only · " + MobileAudioTrackPolicy.displayLanguage(
+                        selected.getLanguage(), audioLabel(selected), selected.getFormatId()),
+                labels.toArray(new String[0]), actions.toArray(new Runnable[0]));
+    }
+
+    private void preferOriginalAudioOnce() {
+        if (mOriginalAudioApplied) return;
+        List<FormatItem> tracks = mobileAudioFormats();
+        if (tracks.isEmpty()) return;
+        FormatItem best = null;
+        for (FormatItem track : tracks) {
+            if (MobileAudioTrackPolicy.original(track.getLanguage(), audioLabel(track),
+                    track.getFormatId()) &&
+                    (best == null || audioBitrate(track) > audioBitrate(best)))
+                best = track;
+        }
+        if (best != null) {
+            mOriginalAudioApplied = true;
+            if (!best.isSelected()) player.setFormat(best);
+        } else if (android.os.SystemClock.uptimeMillis() -
+                mAudioMetadataWaitingSince > 6000) {
+            // The source did not identify an original track. Do not make up
+            // an original language or switch randomly to a different dub.
+            mOriginalAudioApplied = true;
+        }
     }
 
     private void showAdvancedOptions() {
         showSheet("Advanced options", null,
                 new String[]{"Video information", "Loop video",
-                        "SponsorBlock settings", "Audio language",
+                        "SponsorBlock settings", "Audio language", "Audio quality",
                         "Exact resolution", "Playback speed"},
                 new Runnable[]{() -> runAction(R.id.action_info),
                         () -> runAction(R.id.action_repeat),
                         () -> com.liskovsoft.smartyoutubetv2.common.app.presenters.settings
                                 .SponsorBlockSettingsPresenter.instance(activity).show(),
-                        this::showAudioLanguage,
+                        this::showAudioLanguage, this::showAudioQuality,
                         this::showAdvancedQuality, this::showSpeeds});
     }
 
@@ -792,6 +899,8 @@ final class MobileTouchPlayerControls {
         if (scrubPreviews != null) scrubPreviews.setVideo(video);
         chapterMarkerDuration = -1;
         sponsorMarkerSignature = Long.MIN_VALUE;
+        mOriginalAudioApplied = false;
+        mAudioMetadataWaitingSince = android.os.SystemClock.uptimeMillis();
         sponsorMarkers.updateSegments(java.util.Collections.emptyList());
     }
 
@@ -807,6 +916,7 @@ final class MobileTouchPlayerControls {
 
     void refresh() {
         if (released) return;
+        preferOriginalAudioOnce();
         boolean playing = player.getPlayWhenReady();
         if (lastMediaPlaying == null || lastMediaPlaying != playing) {
             lastMediaPlaying = playing;
