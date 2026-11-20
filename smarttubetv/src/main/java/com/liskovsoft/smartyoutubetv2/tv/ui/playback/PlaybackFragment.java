@@ -437,9 +437,9 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         if (!MobileUi.isHandheld(getContext()) || !isAdded() ||
                 mPlayer == null || getView() == null) return false;
         View renderer = getSurfaceView();
-        if (renderer == null || !renderer.isAttachedToWindow() ||
-                renderer.getWidth() <= 0 || renderer.getHeight() <= 0)
-            return false;
+        if (renderer == null || !MobileRotationSurfacePolicy.hasUsableFrame(
+                renderer.getWidth(), renderer.getHeight(),
+                renderer.isAttachedToWindow())) return false;
         try {
             if (!refreshExistingVideoSurface()) return false;
             renderer.invalidate();
