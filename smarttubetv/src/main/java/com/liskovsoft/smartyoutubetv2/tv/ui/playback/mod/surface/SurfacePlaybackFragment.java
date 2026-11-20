@@ -86,6 +86,11 @@ public class SurfacePlaybackFragment extends PlaybackSupportFragment {
                 mVideoSurfaceWrapper.refreshSurfaceBinding();
     }
 
+    protected long lastCompositedVideoFrameUptimeMs() {
+        return mVideoSurfaceWrapper != null
+                ? mVideoSurfaceWrapper.lastVideoFrameUptimeMs() : 0L;
+    }
+
     @Override
     protected void onVideoSizeChanged(int width, int height) {
         mVideoAspectRatio = ((float) width) / height;
