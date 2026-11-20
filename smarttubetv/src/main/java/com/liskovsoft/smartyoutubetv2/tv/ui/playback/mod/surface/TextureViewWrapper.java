@@ -19,6 +19,7 @@ public class TextureViewWrapper implements SurfaceWrapper {
     private SurfaceHolder.Callback mMediaPlaybackCallback;
     /** A single Surface lives for the entire SurfaceTexture lifetime. */
     private Surface mTextureSurface;
+    private long mLastUpdatedFrameMs;
 
     @SuppressLint("WrongConstant")
     public TextureViewWrapper(Context context, ViewGroup root) {
@@ -29,6 +30,7 @@ public class TextureViewWrapper implements SurfaceWrapper {
             public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
                 if (mTextureSurface != null) mTextureSurface.release();
                 mTextureSurface = new Surface(surface);
+                mLastUpdatedFrameMs = 0L;
                 mState = SURFACE_CREATED;
                 if (mMediaPlaybackCallback != null) {
                     mMediaPlaybackCallback.surfaceCreated(
@@ -50,6 +52,7 @@ public class TextureViewWrapper implements SurfaceWrapper {
                 // Otherwise the next fullscreen resize can decode into a
                 // surface Android has already destroyed.
                 mState = SURFACE_NOT_CREATED;
+                mLastUpdatedFrameMs = 0L;
                 if (mMediaPlaybackCallback != null && mTextureSurface != null) {
                     mMediaPlaybackCallback.surfaceDestroyed(
                             new TextureViewSurfaceHolder(mTextureSurface));
@@ -63,7 +66,9 @@ public class TextureViewWrapper implements SurfaceWrapper {
 
             @Override
             public void onSurfaceTextureUpdated(SurfaceTexture surface) {
-
+                // Unlike Surface.isValid(), this proves the TextureView has
+                // received an actual new frame after fullscreen relayout.
+                mLastUpdatedFrameMs = android.os.SystemClock.uptimeMillis();
             }
         });
     }
@@ -89,6 +94,11 @@ public class TextureViewWrapper implements SurfaceWrapper {
         mMediaPlaybackCallback.surfaceCreated(
                 new TextureViewSurfaceHolder(mTextureSurface));
         return true;
+    }
+
+    @Override
+    public long lastVideoFrameUptimeMs() {
+        return mLastUpdatedFrameMs;
     }
 
     @Override
