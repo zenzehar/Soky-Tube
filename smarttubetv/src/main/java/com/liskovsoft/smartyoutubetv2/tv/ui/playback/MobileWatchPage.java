@@ -342,8 +342,11 @@ final class MobileWatchPage {
             // No legacy TV-style fullscreen flags are reapplied in portrait.
         }
         videoFrame.setLayoutParams(params);
+        touchControls.setFullscreenState(landscape);
     }
-    private void toggleFullscreen() {
+
+    /** One predictable fullscreen/restore action, irrespective of rotation sensor. */
+    void toggleFullscreen() {
         boolean landscape = activity.getResources().getConfiguration().orientation ==
                 Configuration.ORIENTATION_LANDSCAPE;
         activity.setRequestedOrientation(landscape
