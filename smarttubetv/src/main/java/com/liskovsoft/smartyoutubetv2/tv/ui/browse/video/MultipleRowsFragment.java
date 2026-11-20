@@ -107,7 +107,7 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         }, true);
         mMobileFeed.setBottomInsetDp(16);
         mMobileFeed.setOnRefresh(() ->
-                BrowsePresenter.instance(requireContext()).refresh(false));
+                BrowsePresenter.instance(requireContext()).refreshMobile(false));
         mMobileFeed.setOnVideoVisible(video -> {
             if (video == null || mVideoGroupAdapters == null || mMainPresenter == null) return;
             for (VideoGroupObjectAdapter group : mVideoGroupAdapters.values()) {
