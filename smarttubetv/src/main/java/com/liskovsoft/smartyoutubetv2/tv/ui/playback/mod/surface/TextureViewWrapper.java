@@ -17,6 +17,8 @@ public class TextureViewWrapper implements SurfaceWrapper {
     private int mState = SURFACE_NOT_CREATED;
     private final TextureView mVideoSurface;
     private SurfaceHolder.Callback mMediaPlaybackCallback;
+    /** A single Surface lives for the entire SurfaceTexture lifetime. */
+    private Surface mTextureSurface;
 
     @SuppressLint("WrongConstant")
     public TextureViewWrapper(Context context, ViewGroup root) {
@@ -25,26 +27,37 @@ public class TextureViewWrapper implements SurfaceWrapper {
         mVideoSurface.setSurfaceTextureListener(new SurfaceTextureListener() {
             @Override
             public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-                if (mMediaPlaybackCallback != null) {
-                    mMediaPlaybackCallback.surfaceCreated(new TextureViewSurfaceHolder(new Surface(surface)));
-                }
+                if (mTextureSurface != null) mTextureSurface.release();
+                mTextureSurface = new Surface(surface);
                 mState = SURFACE_CREATED;
+                if (mMediaPlaybackCallback != null) {
+                    mMediaPlaybackCallback.surfaceCreated(
+                            new TextureViewSurfaceHolder(mTextureSurface));
+                }
             }
 
             @Override
             public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-                if (mMediaPlaybackCallback != null) {
-                    mMediaPlaybackCallback.surfaceChanged(new TextureViewSurfaceHolder(new Surface(surface)), 4, width, height);
+                if (mMediaPlaybackCallback != null && mTextureSurface != null) {
+                    mMediaPlaybackCallback.surfaceChanged(
+                            new TextureViewSurfaceHolder(mTextureSurface), 4, width, height);
                 }
             }
 
             @Override
             public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-                if (mMediaPlaybackCallback != null) {
-                    mMediaPlaybackCallback.surfaceDestroyed(new TextureViewSurfaceHolder(new Surface(surface)));
-                }
+                // Clear the decoder output BEFORE releasing the native Surface.
+                // Otherwise the next fullscreen resize can decode into a
+                // surface Android has already destroyed.
                 mState = SURFACE_NOT_CREATED;
-
+                if (mMediaPlaybackCallback != null && mTextureSurface != null) {
+                    mMediaPlaybackCallback.surfaceDestroyed(
+                            new TextureViewSurfaceHolder(mTextureSurface));
+                }
+                if (mTextureSurface != null) {
+                    mTextureSurface.release();
+                    mTextureSurface = null;
+                }
                 return true;
             }
 
@@ -61,11 +74,21 @@ public class TextureViewWrapper implements SurfaceWrapper {
     public void setSurfaceHolderCallback(SurfaceHolder.Callback callback) {
         mMediaPlaybackCallback = callback;
 
-        if (callback != null) {
-            if (mState == SURFACE_CREATED) {
-                mMediaPlaybackCallback.surfaceCreated(new TextureViewSurfaceHolder(new Surface(mVideoSurface.getSurfaceTexture())));
-            }
-        }
+        refreshSurfaceBinding();
+    }
+
+    @Override
+    public boolean refreshSurfaceBinding() {
+        if (mState != SURFACE_CREATED || mTextureSurface == null ||
+                !mTextureSurface.isValid() || !mVideoSurface.isAvailable() ||
+                !mVideoSurface.isAttachedToWindow() || mMediaPlaybackCallback == null)
+            return false;
+        // Replay the original Leanback surfaceCreated event: it is already
+        // wired to the ExoPlayer decoder and keeps the TextureView's one
+        // SurfaceTextureListener intact. Do not use setVideoTextureView here.
+        mMediaPlaybackCallback.surfaceCreated(
+                new TextureViewSurfaceHolder(mTextureSurface));
+        return true;
     }
 
     @Override
