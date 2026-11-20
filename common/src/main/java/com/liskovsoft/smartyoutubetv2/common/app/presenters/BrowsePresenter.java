@@ -629,6 +629,18 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
         }
     }
 
+    /** Called only from handheld pull-to-refresh, never from TV.
+     * Re-create the News Observable so the next subscription requests a new
+     * provider snapshot rather than reusing one constructed at app startup.
+     * The provider still controls which news it recommends.
+     */
+    public void refreshMobile(boolean focusOnContent) {
+        if (mCurrentSection != null && mCurrentSection.getId() == MediaGroup.TYPE_NEWS) {
+            mRowMapping.put(MediaGroup.TYPE_NEWS, getContentService().getNewsObserve());
+        }
+        refresh(focusOnContent);
+    }
+
     private void updateRefreshTime() {
         mLastUpdateTimeMs = System.currentTimeMillis();
     }
