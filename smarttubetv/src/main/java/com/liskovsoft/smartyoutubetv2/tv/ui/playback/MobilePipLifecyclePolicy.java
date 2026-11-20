@@ -14,4 +14,14 @@ final class MobilePipLifecyclePolicy {
         if (audioOnly || changingConfiguration || enteringPip) return false;
         return pipSessionActive || finishing;
     }
+
+    /** PiP exit is distinct from fullscreen expansion. The screen must NOT
+     * require isFinishing() or PowerManager.isInteractive() to release audio.
+     */
+    static boolean shouldStopAfterPipExit(boolean pipSessionActive,
+            boolean playbackResumed, boolean explicitAudioOnly,
+            boolean inSystemPip, boolean changingConfiguration) {
+        return pipSessionActive && !playbackResumed && !explicitAudioOnly &&
+                !inSystemPip && !changingConfiguration;
+    }
 }
