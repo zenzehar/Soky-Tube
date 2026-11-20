@@ -210,6 +210,18 @@ final class MobileWatchPage {
                 });
             }
         });
+        // Android's onConfigurationChanged runs before fullscreen's actual
+        // player rectangle is measured. The video must bind only after this
+        // newly sized rectangle has appeared, rather than accepting the
+        // previous portrait surface as already recovered.
+        videoFrame.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, orr, ob) -> {
+            int width = r - l;
+            int height = b - t;
+            if (width > 0 && height > 0 &&
+                    (width != orr - ol || height != ob - ot))
+                videoFrame.post(() -> activity.onMobileVideoFrameLaidOut(
+                        videoFrame.getWidth(), videoFrame.getHeight()));
+        });
         videoFrame.post(this::applyLayout);
         onVideoChanged(player.getVideo());
         setChapters(player.getMobileChapters());

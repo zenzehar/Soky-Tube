@@ -16,6 +16,7 @@ on:
       - 'fix/mobile-v7-9-*'
       - 'fix/mobile-v7-10-*'
       - 'fix/mobile-v7-11-*'
+      - 'fix/mobile-v7-12-*'
   workflow_dispatch:
 
 concurrency:
@@ -72,6 +73,9 @@ jobs:
       - name: Test original and dubbed audio grouping
         run: |
           ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileAudioTrackPolicyTest"
+      - name: Test first fullscreen measured-surface recovery
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileRotationSurfacePolicyTest"
       - name: Build installable debug-signed mobile APK
         run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
@@ -92,8 +96,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-11-stability-audio-auto-20261120 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.11 - Fullscreen, PiP Close, News Refresh, Android Auto and Original Audio (20 Nov 2026)" \
-            --notes "v7.11: add accessible fullscreen/exit fullscreen touch toggle; restore ExoPlayer video surface after rotation instead of allowing frozen/black video with live audio; stop PiP media service/decoder on X even if onStop or finishing state is delayed; mobile News refresh requests a new provider observable and preserves loading spinner until data; Android Auto has non-empty audio browser root and handles steering-wheel media-button intents with existing session; audio language and audio bitrate/codec are separate choices, with explicit original audio automatically preferred and exact chosen audio track preserved on mobile. Android TV unaffected by mobile-specific behaviour. OEM Android Auto, rotation and original-language flags require physical testing; upstream News recommendation freshness is not guaranteed." \
+          gh release create mobile-preview-v7-12-first-fullscreen-surface-20261121 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.12 - First Fullscreen Video Surface Fix (21 Nov 2026)" \
+            --notes "v7.12 targeted fix: phone fullscreen first-transition black screen with audio. Root cause hypothesis: v7.11 surface recovery wrongly accepted an old valid but not freshly measured video surface, directly bypassed the Leanback callback, and on TextureView could replace its SurfaceTextureListener. Mobile now uses a stable texture-backed video output for view resizing and PiP animations (TV settings and TV playback unchanged), one retained Surface per SurfaceTexture lifecycle, the original SurfaceHolderGlueHost callback for rebind, and a measured video-frame layout callback plus bounded retries before restoring. Adds MobileRotationSurfacePolicyTest. Preserves all previous v7.11 improvements. OEM phone validation still required; video performance and decoder hardware differences may vary." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-11-stability-audio-auto-20261120 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-12-first-fullscreen-surface-20261121 dist/*.apk dist/SHA256SUMS.txt --clobber

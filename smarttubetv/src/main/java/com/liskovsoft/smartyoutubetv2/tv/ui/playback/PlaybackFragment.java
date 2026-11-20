@@ -424,38 +424,35 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     /**
-     * Rebind only the existing decoder's VIDEO output after phone sleep.
-     * Some Android SurfaceView/TextureView devices resume audio from the old
-     * decoder while presenting the final frame of an invalidated Surface.
-     * Do not seek, prepare, pause or recreate the playing ExoPlayer.
+     * Restore VIDEO rendering after rotation or unlock via the single
+     * SurfaceHolderGlueHost lifecycle owner. The previous implementation
+     * called setVideoTextureView() directly, replacing the TextureView
+     * wrapper's SurfaceTextureListener; it could also stop retrying before
+     * the fullscreen container had even finished measuring.
      *
-     * @return true if a valid visible surface was reattached.
+     * @return true only once a measured, attached surface was handed back to
+     * the existing LeanbackPlayerAdapter.
      */
+    /** Frame-composited signal from the original TextureView listener. */
+    long lastMobileVideoFrameUptimeMs() {
+        return lastCompositedVideoFrameUptimeMs();
+    }
+
     boolean restoreMobileVideoSurfaceAfterUnlock() {
         if (!MobileUi.isHandheld(getContext()) || !isAdded() ||
                 mPlayer == null || getView() == null) return false;
         View renderer = getSurfaceView();
-        if (renderer == null || !renderer.isAttachedToWindow()) return false;
+        if (renderer == null || !MobileRotationSurfacePolicy.hasUsableFrame(
+                renderer.getWidth(), renderer.getHeight(),
+                renderer.isAttachedToWindow())) return false;
         try {
-            if (renderer instanceof SurfaceView) {
-                Surface surface = ((SurfaceView) renderer).getHolder().getSurface();
-                if (surface == null || !surface.isValid()) return false;
-                mPlayer.clearVideoSurface();
-                mPlayer.setVideoSurface(surface);
-            } else if (renderer instanceof TextureView) {
-                TextureView texture = (TextureView) renderer;
-                if (!texture.isAvailable() || texture.getSurfaceTexture() == null)
-                    return false;
-                mPlayer.clearVideoSurface();
-                mPlayer.setVideoTextureView(texture);
-            } else {
-                return false;
-            }
+            if (!refreshExistingVideoSurface()) return false;
             renderer.invalidate();
             onMobileWindowResized();
             return true;
         } catch (RuntimeException exception) {
-            Log.e(TAG, "Mobile video surface recovery failed: " + exception.getMessage());
+            Log.e(TAG, "Managed mobile surface recovery failed: " +
+                    exception.getMessage());
             return false;
         }
     }
