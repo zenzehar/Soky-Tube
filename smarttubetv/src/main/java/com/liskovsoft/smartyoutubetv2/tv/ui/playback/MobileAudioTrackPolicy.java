@@ -16,7 +16,8 @@ final class MobileAudioTrackPolicy {
 
     static boolean original(String language, String label, String formatId) {
         return contains(originalFields(language, label, formatId), "original") &&
-                !descriptive(language, label, formatId);
+                !descriptive(language, label, formatId) &&
+                !dubbed(language, label, formatId);
     }
 
     static boolean dubbed(String language, String label, String formatId) {
