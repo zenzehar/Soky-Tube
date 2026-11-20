@@ -40,7 +40,14 @@ public class SurfacePlaybackFragment extends PlaybackSupportFragment {
         if (root == null) {
             throw new IllegalStateException("Can't create root of SurfacePlaybackFragment");
         }
-        mVideoSurfaceWrapper = (PlayerTweaksData.instance(getContext()).isTextureViewEnabled() ||
+        // The handheld player supports portrait/fullscreen morphs and continuous
+        // view resizing without replacing the decoder. A SurfaceView's native
+        // surface may be destroyed during those changes even while ExoPlayer
+        // keeps decoding audio. TextureView is managed with the same original
+        // playback glue callback and survives these geometry transitions.
+        // TV remains on the user-selected SurfaceView/TextureView setting.
+        mVideoSurfaceWrapper = (MobileUi.isHandheld(getContext()) ||
+                PlayerTweaksData.instance(getContext()).isTextureViewEnabled() ||
                 PlayerData.instance(getContext()).getRotationAngle() != 0) ?
                 new TextureViewWrapper(getContext(), root) : new SurfaceViewWrapper(getContext(), root);
         mVideoSurfaceRoot = root.findViewById(com.liskovsoft.smartyoutubetv2.tv.R.id.surface_root);
@@ -66,6 +73,17 @@ public class SurfacePlaybackFragment extends PlaybackSupportFragment {
         if (mVideoSurfaceWrapper != null) {
             mVideoSurfaceWrapper.setSurfaceHolderCallback(callback);
         }
+    }
+
+    /**
+     * Re-notify the original SurfaceHolderGlueHost after the measured window
+     * and underlying SurfaceTexture are ready. No independent ExoPlayer
+     * setVideoSurface/setVideoTextureView callbacks are installed here.
+     */
+    protected boolean refreshExistingVideoSurface() {
+        return mVideoSurfaceWrapper != null && mVideoSurfaceRoot != null &&
+                mVideoSurfaceRoot.getWidth() > 0 && mVideoSurfaceRoot.getHeight() > 0 &&
+                mVideoSurfaceWrapper.refreshSurfaceBinding();
     }
 
     @Override
