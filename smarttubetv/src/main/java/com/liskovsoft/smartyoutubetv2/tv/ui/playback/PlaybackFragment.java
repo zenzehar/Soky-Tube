@@ -433,6 +433,11 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
      * @return true only once a measured, attached surface was handed back to
      * the existing LeanbackPlayerAdapter.
      */
+    /** Frame-composited signal from the original TextureView listener. */
+    long lastMobileVideoFrameUptimeMs() {
+        return lastCompositedVideoFrameUptimeMs();
+    }
+
     boolean restoreMobileVideoSurfaceAfterUnlock() {
         if (!MobileUi.isHandheld(getContext()) || !isAdded() ||
                 mPlayer == null || getView() == null) return false;
