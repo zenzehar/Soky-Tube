@@ -8,6 +8,8 @@ import android.content.Intent;
 import android.content.Context;
 import android.content.IntentFilter;
 import android.content.BroadcastReceiver;
+import android.content.ClipboardManager;
+import android.content.ClipData;
 import android.app.KeyguardManager;
 import android.os.PowerManager;
 import android.view.WindowManager;
@@ -214,6 +216,7 @@ public class PlaybackActivity extends LeanbackActivity {
         if (attempt > MobileRotationSurfacePolicy.MAX_ATTEMPTS) {
             mMobileRotationRecoveryPending = false;
             Log.w(TAG, "Mobile fullscreen output unavailable after layout retries");
+            captureMobileVideoDiagnostics("no-new-frame-after-retries");
             return;
         }
         final int generation = mMobileRotationGeneration;
@@ -236,6 +239,7 @@ public class PlaybackActivity extends LeanbackActivity {
                 // the NEW fullscreen texture, not merely a still-valid old
                 // surface. Stop retries as soon as the first frame arrives.
                 mMobileRotationRecoveryPending = false;
+                captureMobileVideoDiagnostics("fresh-texture-frame-confirmed");
                 return;
             }
             if (MobileRotationSurfacePolicy.shouldRebind(attempt)) {
@@ -251,6 +255,59 @@ public class PlaybackActivity extends LeanbackActivity {
             // avoid repeatedly interrupting a slow hardware decoder.
             scheduleMobileRotationVideoRecovery(attempt + 1);
         }, attempt == 0 ? 100L : 170L);
+    }
+
+    /** A user-triggered, privacy-safe report. Captures only player/window
+     * geometry and recent texture-frame age, never Google account,
+     * video title, URL, history or access tokens.
+     */
+    private String mobileVideoDiagnosticsSnapshot(String reason) {
+        View frame = findViewById(R.id.mobile_player_frame);
+        View decor = getWindow().getDecorView();
+        long lastFrameMs = mPlaybackFragment != null
+                ? mPlaybackFragment.lastMobileVideoFrameUptimeMs() : 0L;
+        long nowMs = android.os.SystemClock.uptimeMillis();
+        return "Soky Tube mobile v7.13 playback diagnostics" +
+                "\nreason: " + reason +
+                "\nscreenOrientation: " + getResources().getConfiguration().orientation +
+                "\npiP: " + isInPipMode() +
+                "\nwindowFocus: " + decor.hasWindowFocus() +
+                "\nplayerReady: " + (mPlaybackFragment != null &&
+                        mPlaybackFragment.isEngineInitialized()) +
+                "\nplayWhenReady: " + (mPlaybackFragment != null &&
+                        mPlaybackFragment.getPlayWhenReady()) +
+                "\nframeMeasured: " + mMobileRotationFrameMeasured +
+                "\nframeSize: " + (frame == null ? "missing" :
+                        frame.getWidth() + "x" + frame.getHeight()) +
+                "\nframeScale: " + (frame == null ? "n/a" :
+                        frame.getScaleX() + "," + frame.getScaleY()) +
+                "\nframeTranslation: " + (frame == null ? "n/a" :
+                        frame.getTranslationX() + "," + frame.getTranslationY()) +
+                "\nlastCompositedFrameAgoMs: " + (lastFrameMs > 0 ?
+                        nowMs - lastFrameMs : -1) +
+                "\nrotationPending: " + mMobileRotationRecoveryPending +
+                "\ncarBrowserConnected: " + MobilePlaybackService.hasCarMediaBrowserClient();
+    }
+
+    private void captureMobileVideoDiagnostics(String reason) {
+        if (!MobileUi.isHandheld(this)) return;
+        getSharedPreferences("soky_video_diagnostics", MODE_PRIVATE).edit()
+                .putString("last", mobileVideoDiagnosticsSnapshot(reason))
+                .apply();
+    }
+
+    void copyMobileVideoDiagnostics() {
+        String previous = getSharedPreferences("soky_video_diagnostics", MODE_PRIVATE)
+                .getString("last", "No completed fullscreen transition recorded.");
+        String report = previous + "\n\n" +
+                mobileVideoDiagnosticsSnapshot("user-requested-current-state");
+        ClipboardManager manager = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (manager != null) {
+            manager.setPrimaryClip(ClipData.newPlainText(
+                    "Soky Tube playback diagnostics", report));
+            android.widget.Toast.makeText(this,
+                    "Playback diagnostics copied", android.widget.Toast.LENGTH_SHORT).show();
+        }
     }
 
     private boolean isMobileScreenInteractive() {
