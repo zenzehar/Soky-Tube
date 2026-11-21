@@ -38,6 +38,19 @@
             </intent-filter>
         </service>
 
+        <!-- Phone-side launcher for native passenger-only secondary display output.
+             This does not create an Android Auto video service or bypass restrictions. -->
+        <activity
+            android:name="com.liskovsoft.smartyoutubetv2.tv.ui.car.SokyRearVideoActivity"
+            android:label="Soky Rear Video"
+            android:exported="true"
+            android:resizeableActivity="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <!-- A separate static diagnostic Activity; do not expose playback UI
              under CAR_LAUNCHER until a real parked-state guarantee is tested. -->
         <activity
