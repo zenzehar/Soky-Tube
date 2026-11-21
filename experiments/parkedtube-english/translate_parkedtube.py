@@ -85,6 +85,9 @@ def main() -> None:
     activity = one(activity, '        keyboardEnglish = preferences.englishKeyboard();\n', '', "Remove Russian keyboard default")
     activity = one(activity, 'String[] rows = keyboardSymbols ? SYMBOL_ROWS : keyboardEnglish ? EN_ROWS : RU_ROWS;', 'String[] rows = keyboardSymbols ? SYMBOL_ROWS : EN_ROWS;', "English-only keyboard")
     activity = regexp(activity, r'        Button language = makeKeyboardButton\(keyboardEnglish \? "РУ" : "EN",.*?        addKeyboardKey\(bottomRow, language, 1\.1f\);\n\n', '', "Remove language toggle")
+    # The upstream YouTube search CSS selector contains a Russian "Search" fallback.
+    # Use the English selector only; third-party video titles are untouched.
+    activity = activity.replace("Поиск", "Search")
     activity = one(activity, 'private static final String YOUTUBE_URL = "https://www.youtube.com/";', 'private static final String YOUTUBE_URL = "https://www.youtube.com/?hl=en";', "English YouTube homepage")
     activity = one(activity, 'navigateTo("https://www.youtube.com/results?search_query=" + Uri.encode(clean));', 'navigateTo("https://www.youtube.com/results?search_query=" + Uri.encode(clean) + "&hl=en");', "English search URL")
 
