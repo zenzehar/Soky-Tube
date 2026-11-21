@@ -24,4 +24,15 @@ final class MobilePipLifecyclePolicy {
         return pipSessionActive && !playbackResumed && !explicitAudioOnly &&
                 !inSystemPip && !changingConfiguration;
     }
+
+    /** A pending Home-to-auto-PiP handoff must not be mistaken for closing
+     * an already-visible PiP window when lifecycle callbacks are reordered. */
+    static boolean shouldStopAfterPipExit(boolean pipSessionActive,
+            boolean playbackResumed, boolean explicitAudioOnly,
+            boolean inSystemPip, boolean changingConfiguration,
+            boolean autoPipHandoffPending) {
+        return !autoPipHandoffPending && shouldStopAfterPipExit(
+                pipSessionActive, playbackResumed, explicitAudioOnly,
+                inSystemPip, changingConfiguration);
+    }
 }
