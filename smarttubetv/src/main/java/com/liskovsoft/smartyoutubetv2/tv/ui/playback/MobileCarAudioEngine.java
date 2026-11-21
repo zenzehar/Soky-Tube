@@ -4,6 +4,8 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Bundle;
+import android.os.ResultReceiver;
+import android.net.Uri;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
@@ -128,6 +130,29 @@ final class MobileCarAudioEngine {
             connector = new MediaSessionConnector(session);
             connector.setMediaMetadataProvider(p -> metadata(current));
             connector.setPlayer(player);
+            // Android Auto may select the Now Playing row again AFTER the
+            // service-owned player has started. Without a PlaybackPreparer,
+            // legacy ExoPlayer ignores PLAY_FROM_MEDIA_ID even though Play
+            // works, recreating the same "tap but no resume" symptom.
+            connector.setPlaybackPreparer(new MediaSessionConnector.PlaybackPreparer() {
+                @Override public long getSupportedPrepareActions() {
+                    return PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID |
+                            PlaybackStateCompat.ACTION_PREPARE_FROM_MEDIA_ID;
+                }
+                @Override public void onPrepare(boolean playWhenReady) {}
+                @Override public void onPrepareFromMediaId(String mediaId,
+                        boolean playWhenReady, Bundle extras) {
+                    if ("now_playing_audio".equals(mediaId) && player != null)
+                        player.setPlayWhenReady(playWhenReady);
+                }
+                @Override public void onPrepareFromSearch(String query,
+                        boolean playWhenReady, Bundle extras) {}
+                @Override public void onPrepareFromUri(Uri uri,
+                        boolean playWhenReady, Bundle extras) {}
+                @Override public boolean onCommand(Player current,
+                        ControlDispatcher dispatcher, String command, Bundle extras,
+                        ResultReceiver result) { return false; }
+            });
             connector.setCustomActionProviders(
                     customSeek(MobilePlaybackService.ACTION_SEEK_BACK_10,
                             "Back 10 seconds", R.drawable.mobile_ic_back_10, false),
