@@ -43,6 +43,8 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     public static final String ACTION_NEXT = "com.sokytube.mobile.MEDIA_NEXT";
     public static final String ACTION_PREVIOUS = "com.sokytube.mobile.MEDIA_PREVIOUS";
     public static final String ACTION_STOP = "com.sokytube.mobile.MEDIA_STOP";
+    public static final String ACTION_SEEK_BACK_10 = "com.sokytube.mobile.SEEK_BACK_10";
+    public static final String ACTION_SEEK_FORWARD_10 = "com.sokytube.mobile.SEEK_FORWARD_10";
     private static final String CHANNEL_ID = "sokytube_mobile_media_controls_v2";
     private static final int NOTIFICATION_ID = 2037;
 
