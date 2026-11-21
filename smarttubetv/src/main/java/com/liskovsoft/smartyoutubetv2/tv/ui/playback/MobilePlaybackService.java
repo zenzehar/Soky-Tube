@@ -23,6 +23,7 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 import androidx.media.MediaBrowserServiceCompat;
+import androidx.media.session.MediaButtonReceiver;
 
 import com.liskovsoft.smartyoutubetv2.tv.R;
 
@@ -46,6 +47,14 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
 
     private static MediaSessionCompat sharedSession;
     private static MobilePlaybackService activeService;
+    private static volatile boolean explicitAudioOnly;
+    private static final String AUTO_ROOT = "soky_audio_root";
+    private static final String AUTO_HELP = "soky_audio_phone_help";
+    private static final String AUTO_NOW = "now_playing_audio";
+
+    static void setExplicitAudioOnly(boolean allowed) {
+        explicitAudioOnly = allowed;
+    }
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean foreground;
     private Boolean requestedPlaying;
@@ -86,13 +95,19 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     }
 
     public static void refresh() {
-        if (activeService != null) activeService.refreshNotification();
+        if (activeService != null) {
+            activeService.refreshNotification();
+            // A new video may have been selected after Android Auto opened
+            // its browse hierarchy. Refresh the driver-safe audio item.
+            activeService.notifyChildrenChanged(AUTO_ROOT);
+        }
     }
 
     /** Explicitly end the floating player's notification and media service
      * after Android removes its PiP window. This is NOT used for background audio.
      */
     public static void stop(Context context) {
+        explicitAudioOnly = false;
         if (activeService != null) activeService.stopForegroundAndSelf();
         else context.stopService(new Intent(context, MobilePlaybackService.class));
     }
@@ -122,24 +137,38 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     @Nullable @Override public BrowserRoot onGetRoot(@NonNull String clientPackageName,
             int clientUid, @Nullable Bundle rootHints) {
         // A driver-safe audio-only media root, with no browsing video thumbnails.
-        return new BrowserRoot("soky_audio_root", null);
+        return new BrowserRoot(AUTO_ROOT, null);
     }
 
     @Override public void onLoadChildren(@NonNull String parentId,
             @NonNull Result<List<MediaBrowserCompat.MediaItem>> result) {
-        if (!"soky_audio_root".equals(parentId) || sharedSession == null) {
+        if (!AUTO_ROOT.equals(parentId)) {
             result.sendResult(Collections.emptyList());
             return;
         }
-        MediaMetadataCompat metadata = sharedSession.getController().getMetadata();
-        if (metadata == null || metadata.getString(MediaMetadataCompat.METADATA_KEY_TITLE) == null) {
-            result.sendResult(Collections.emptyList());
+        MediaMetadataCompat metadata = sharedSession != null
+                ? sharedSession.getController().getMetadata() : null;
+        String title = metadata != null
+                ? metadata.getString(MediaMetadataCompat.METADATA_KEY_TITLE) : null;
+        if (title == null || title.length() == 0) {
+            // The old service exposed an EMPTY root unless a phone video was
+            // already active. Some Android Auto hosts reject that outright.
+            // Inform the driver how to initiate playback, without inventing
+            // a playable title that cannot be played.
+            android.support.v4.media.MediaDescriptionCompat info =
+                    new android.support.v4.media.MediaDescriptionCompat.Builder()
+                            .setMediaId(AUTO_HELP)
+                            .setTitle("Start audio from your phone")
+                            .setSubtitle("Open Soky Tube on your phone, then control audio here")
+                            .build();
+            result.sendResult(Collections.singletonList(new MediaBrowserCompat.MediaItem(
+                    info, MediaBrowserCompat.MediaItem.FLAG_BROWSABLE)));
             return;
         }
         android.support.v4.media.MediaDescriptionCompat item =
                 new android.support.v4.media.MediaDescriptionCompat.Builder()
-                    .setMediaId("now_playing_audio")
-                    .setTitle(metadata.getString(MediaMetadataCompat.METADATA_KEY_TITLE))
+                    .setMediaId(AUTO_NOW)
+                    .setTitle(title)
                     .setSubtitle(metadata.getString(MediaMetadataCompat.METADATA_KEY_ARTIST))
                     .build();
         result.sendResult(Collections.singletonList(new MediaBrowserCompat.MediaItem(item,
@@ -147,6 +176,13 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        // Bluetooth and steering-wheel media keys may arrive here from the
+        // AndroidX MediaButtonReceiver rather than as notification actions.
+        // Let the ONE ExoPlayer-backed session consume them directly.
+        if (intent != null && Intent.ACTION_MEDIA_BUTTON.equals(intent.getAction())) {
+            if (sharedSession != null) MediaButtonReceiver.handleIntent(sharedSession, intent);
+            return START_NOT_STICKY;
+        }
         if (!foreground) {
             try {
                 startForeground(NOTIFICATION_ID, notification());
@@ -240,6 +276,18 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
         foreground = false;
         stopForeground(true);
         stopSelf();
+    }
+
+    @Override public void onTaskRemoved(Intent rootIntent) {
+        // Dismissing a floating window or removing the task must not orphan a
+        // playing notification. Explicit user-requested background AUDIO is
+        // the one exception, and remains available for car controls.
+        if (!explicitAudioOnly) {
+            if (sharedSession != null)
+                sharedSession.getController().getTransportControls().pause();
+            stopForegroundAndSelf();
+        }
+        super.onTaskRemoved(rootIntent);
     }
 
     @Override public void onDestroy() {

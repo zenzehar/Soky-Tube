@@ -121,7 +121,10 @@ public final class MobileVideoFeed {
                 list.canScrollVertically(-1));
         swipeRefresh.setOnRefreshListener(() -> {
             if (onRefresh != null) onRefresh.run();
-            swipeRefresh.postDelayed(() -> swipeRefresh.setRefreshing(false), 850);
+            // A fixed 850ms delay hid the spinner before a slow News network
+            // request had even finished. Stop on real returned content and
+            // only use a timeout as a failure safeguard.
+            swipeRefresh.postDelayed(() -> swipeRefresh.setRefreshing(false), 12_000);
         });
         swipeRefresh.addView(list, new SwipeRefreshLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -224,6 +227,8 @@ public final class MobileVideoFeed {
         }
         allVideos.clear();
         allVideos.addAll(next);
+        if (!next.isEmpty() && swipeRefresh.isRefreshing())
+            swipeRefresh.setRefreshing(false);
         rebuildChips();
         applyFilter();
         // Keep the user's scroll position during background pagination.

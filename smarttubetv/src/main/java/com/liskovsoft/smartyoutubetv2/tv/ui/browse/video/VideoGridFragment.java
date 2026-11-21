@@ -88,7 +88,7 @@ public class VideoGridFragment extends GridFragment implements VideoSection {
         mMobileFeed = new MobileVideoFeed(requireContext(), video ->
                 mMainPresenter.onVideoItemClicked(video), false);
         mMobileFeed.setOnRefresh(() ->
-                BrowsePresenter.instance(requireContext()).refresh(false));
+                BrowsePresenter.instance(requireContext()).refreshMobile(false));
         mMobileFeed.setOnVideoVisible(video -> {
             if (video == null || mGridAdapter == null || mGridAdapter.isEmpty()) return;
             int position = mGridAdapter.indexOf(video);

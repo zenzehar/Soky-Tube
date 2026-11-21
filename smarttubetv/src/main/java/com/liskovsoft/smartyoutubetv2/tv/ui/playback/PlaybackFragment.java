@@ -3,6 +3,8 @@ package com.liskovsoft.smartyoutubetv2.tv.ui.playback;
 import android.media.session.PlaybackState;
 import android.os.Build.VERSION;
 import android.os.Bundle;
+import android.os.ResultReceiver;
+import android.net.Uri;
 import com.liskovsoft.smartyoutubetv2.tv.ui.common.MobileUi;
 import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 import android.support.v4.media.MediaMetadataCompat;
@@ -848,6 +850,38 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
                 mPlaybackPresenter.onNextClicked();
             }
         });
+
+        if (mobile) {
+            // Android Auto marks the Now Playing node as PLAYABLE and sends
+            // PLAY_FROM_MEDIA_ID when tapped. Without a PlaybackPreparer the
+            // legacy MediaSessionConnector ignores that request, giving a
+            // blank/error car screen even while the phone decoder exists.
+            // Resume only the ALREADY selected phone video audio; never start
+            // new video browsing/visual playback in the car.
+            mMediaSessionConnector.setPlaybackPreparer(
+                    new MediaSessionConnector.PlaybackPreparer() {
+                @Override public long getSupportedPrepareActions() {
+                    return PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID |
+                            PlaybackStateCompat.ACTION_PREPARE_FROM_MEDIA_ID;
+                }
+                @Override public void onPrepare(boolean playWhenReady) {
+                    // Not advertised; preserve the existing phone player.
+                }
+                @Override public void onPrepareFromMediaId(String mediaId,
+                        boolean playWhenReady, Bundle extras) {
+                    if ("now_playing_audio".equals(mediaId) && getVideo() != null) {
+                        setPlayWhenReady(playWhenReady);
+                    }
+                }
+                @Override public void onPrepareFromSearch(String query,
+                        boolean playWhenReady, Bundle extras) {}
+                @Override public void onPrepareFromUri(Uri uri,
+                        boolean playWhenReady, Bundle extras) {}
+                @Override public boolean onCommand(Player player,
+                        ControlDispatcher dispatcher, String command, Bundle extras,
+                        ResultReceiver callback) { return false; }
+            });
+        }
 
         // Fix exoplayer pause when switching AFR. The code seems buggy.
         mMediaSessionConnector.setControlDispatcher(new DefaultControlDispatcher() {

@@ -123,6 +123,12 @@ public class PlaybackActivity extends LeanbackActivity {
         }
     }
 
+    /** Explicit touch control independent of the accelerometer setting. */
+    void toggleMobileFullscreen() {
+        if (MobileUi.isHandheld(this) && mMobileWatch != null && !isInPipMode())
+            mMobileWatch.toggleFullscreen();
+    }
+
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
@@ -136,7 +142,22 @@ public class PlaybackActivity extends LeanbackActivity {
                 if (!isFinishing() && mPlaybackFragment != null)
                     mPlaybackFragment.onMobileWindowResized();
             });
+            // Re-initialize the EXISTING decoder's output only after the new
+            // portrait/landscape Surface has actually attached to its window.
+            // Android rotation frequently invalidates SurfaceView while
+            // ExoPlayer continues outputting audio.
+            scheduleMobileRotationVideoRecovery(0);
         }
+    }
+
+    private void scheduleMobileRotationVideoRecovery(int attempt) {
+        if (attempt > 5) return;
+        getWindow().getDecorView().postDelayed(() -> {
+            if (isFinishing() || isInPipMode() || mPlaybackFragment == null ||
+                    !isMobileScreenInteractive() || isMobileKeyguardLocked()) return;
+            if (!mPlaybackFragment.restoreMobileVideoSurfaceAfterUnlock())
+                scheduleMobileRotationVideoRecovery(attempt + 1);
+        }, attempt == 0 ? 170L : 220L);
     }
 
     private boolean isMobileScreenInteractive() {
@@ -223,6 +244,7 @@ public class PlaybackActivity extends LeanbackActivity {
     public void startMobileBackgroundAudio() {
         if (!MobileUi.isHandheld(this) || mPlaybackFragment == null) return;
         mMobileAudioOnly = true;
+        MobilePlaybackService.setExplicitAudioOnly(true);
         mMobilePipTransition = false;
         mMobilePipSessionActive = false;
         mOpenBrowseAfterPip = false;
@@ -240,6 +262,7 @@ public class PlaybackActivity extends LeanbackActivity {
             return;
         if (isInPipMode()) return;
         mMobileAudioOnly = false;
+        MobilePlaybackService.setExplicitAudioOnly(false);
         mMobilePipTransition = true;
         mOpenBrowseAfterPip = browse;
         mBrowseLaunchedForPip = false;
@@ -293,6 +316,7 @@ public class PlaybackActivity extends LeanbackActivity {
 
     private void stopClosedMobilePip() {
         if (mMobileAudioOnly || mPlaybackFragment == null) return;
+        MobilePlaybackService.setExplicitAudioOnly(false);
         mMobilePipSessionActive = false;
         mMobilePipTransition = false;
         mOpenBrowseAfterPip = false;
@@ -360,6 +384,7 @@ public class PlaybackActivity extends LeanbackActivity {
         if (mMobileWatch != null) mMobileWatch.resume();
         if (MobileUi.isHandheld(this)) {
             mMobileAudioOnly = false;
+            MobilePlaybackService.setExplicitAudioOnly(false);
             // Expanded PiP returns to a resumed full-screen player. A dismissed
             // PiP does not resume the Activity; onStop instead stops the engine.
             if (!isInPipMode()) {
@@ -375,12 +400,10 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override protected void onStop() {
         if (mMobileWatch != null) mMobileWatch.stop();
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
-            // Android is not required to mark an Activity as 'finishing'
-            // before a user dismisses the system PiP window with X/swipe.
-            // A PiP that remains visible is PAUSED, not STOPPED. A PiP that
-            // disappears invokes STOP; explicit background-audio mode is exempt.
-            if (!mMobileScreenOff && isMobileScreenInteractive() &&
-                    !isInPipMode() && MobilePipLifecyclePolicy.shouldStopOnStop(
+            // PiP dismissal must end playback even if Android reports the
+            // screen OFF or the power manager temporarily noninteractive.
+            // Those conditions previously let the audio service escape.
+            if (!isInPipMode() && MobilePipLifecyclePolicy.shouldStopOnStop(
                     mMobilePipSessionActive, mMobileAudioOnly,
                     mMobilePipTransition, isChangingConfigurations(), isFinishing())) {
                 stopClosedMobilePip();
@@ -663,9 +686,17 @@ public class PlaybackActivity extends LeanbackActivity {
                 // reopen Home here, not on a fixed 180 ms assumption.
                 getWindow().getDecorView().post(this::launchBrowseOncePipIsVisible);
             } else {
-                // Preserve mMobilePipSessionActive until onResume (expand) or
-                // onStop (dismiss): both paths can report PiP=false.
+                // PiP=false can mean expand or dismissal. Only a resumed,
+                // visible playback screen is an expansion; otherwise the
+                // original player and foreground audio must terminate.
                 mMobilePipTransition = false;
+                getWindow().getDecorView().postDelayed(() -> {
+                    if (MobilePipLifecyclePolicy.shouldStopAfterPipExit(
+                            mMobilePipSessionActive, mMobileInForeground,
+                            mMobileAudioOnly, isInPipMode(), isChangingConfigurations())) {
+                        stopClosedMobilePip();
+                    }
+                }, 500);
             }
         }
     }
