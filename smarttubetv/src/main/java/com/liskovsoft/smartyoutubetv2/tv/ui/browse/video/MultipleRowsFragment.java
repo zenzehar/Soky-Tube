@@ -27,6 +27,9 @@ import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.VideoGroup;
+import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
+import com.liskovsoft.mediaserviceinterfaces.data.MediaItem;
+import io.reactivex.disposables.Disposable;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.BrowsePresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.interfaces.VideoGroupPresenter;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
@@ -61,6 +64,10 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
     private int mSelectedRowIndex = -1;
     private ChannelHeaderCallback mChannelHeaderCallback;
     private MobileVideoFeed mMobileFeed;
+    private boolean mMobileNews;
+    private int mNewsLoadGeneration;
+    private Disposable mNewsSubscriptionsAction;
+    private Disposable mNewsRecommendationsAction;
     private final java.util.Set<String> mMobilePagedVideos = new java.util.HashSet<>();
 
     @Override
@@ -105,9 +112,17 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         mMobileFeed = new MobileVideoFeed(requireContext(), video -> {
             if (mMainPresenter != null) mMainPresenter.onVideoItemClicked(video);
         }, true);
+        mMobileNews = BrowsePresenter.instance(requireContext()).getCurrentSection() != null &&
+                BrowsePresenter.instance(requireContext()).getCurrentSection().getId() == MediaGroup.TYPE_NEWS;
+        if (mMobileNews) mMobileFeed.enablePersonalizedNews();
         mMobileFeed.setBottomInsetDp(16);
-        mMobileFeed.setOnRefresh(() ->
-                BrowsePresenter.instance(requireContext()).refreshMobile(false));
+        mMobileFeed.setOnRefresh(() -> {
+            if (mMobileNews) {
+                mMobileFeed.shufflePersonalizedNews();
+                loadPersonalizedNewsSources();
+            }
+            BrowsePresenter.instance(requireContext()).refreshMobile(false);
+        });
         mMobileFeed.setOnVideoVisible(video -> {
             if (video == null || mVideoGroupAdapters == null || mMainPresenter == null) return;
             for (VideoGroupObjectAdapter group : mVideoGroupAdapters.values()) {
@@ -122,13 +137,58 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         frame.addView(mMobileFeed.getView(), new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         mMobileFeed.scheduleRows(mRowsAdapter);
+        if (mMobileNews) loadPersonalizedNewsSources();
         return frame;
     }
 
     @Override
     public void onDestroyView() {
+        mNewsLoadGeneration++;
+        if (mNewsSubscriptionsAction != null) mNewsSubscriptionsAction.dispose();
+        if (mNewsRecommendationsAction != null) mNewsRecommendationsAction.dispose();
+        mNewsSubscriptionsAction = null;
+        mNewsRecommendationsAction = null;
+        mMobileNews = false;
         mMobileFeed = null;
         super.onDestroyView();
+    }
+
+    private static List<Video> newsVideos(MediaGroup group) {
+        ArrayList<Video> result = new ArrayList<>();
+        if (group != null && group.getMediaItems() != null) {
+            for (MediaItem item : group.getMediaItems()) {
+                Video video = Video.from(item);
+                if (video != null && video.videoId != null) result.add(video);
+            }
+        }
+        return result;
+    }
+
+    private void loadPersonalizedNewsSources() {
+        if (!mMobileNews || mMobileFeed == null) return;
+        final int generation = ++mNewsLoadGeneration;
+        if (mNewsSubscriptionsAction != null) mNewsSubscriptionsAction.dispose();
+        if (mNewsRecommendationsAction != null) mNewsRecommendationsAction.dispose();
+        BrowsePresenter presenter = BrowsePresenter.instance(requireContext());
+        // Every request is optional: a signed-out user or provider error must
+        // never blank the primary News feed.
+        mNewsSubscriptionsAction = presenter.getMobileNewsSubscriptionsObserve()
+                .take(1).subscribe(group -> {
+                    List<Video> videos = newsVideos(group);
+                    if (mMobileFeed != null) mMobileFeed.getView().post(() -> {
+                        if (generation == mNewsLoadGeneration && mMobileFeed != null)
+                            mMobileFeed.setPersonalizedNewsCandidates(videos, true);
+                    });
+                }, error -> Log.e(TAG, "Optional News subscriptions unavailable: " + error));
+        mNewsRecommendationsAction = presenter.getMobileNewsRecommendationsObserve()
+                .take(1).subscribe(groups -> {
+                    ArrayList<Video> videos = new ArrayList<>();
+                    if (groups != null) for (MediaGroup group : groups) videos.addAll(newsVideos(group));
+                    if (mMobileFeed != null) mMobileFeed.getView().post(() -> {
+                        if (generation == mNewsLoadGeneration && mMobileFeed != null)
+                            mMobileFeed.setPersonalizedNewsCandidates(videos, false);
+                    });
+                }, error -> Log.e(TAG, "Optional News recommendations unavailable: " + error));
     }
 
     protected void addHeader(ChannelHeaderCallback callback) {
