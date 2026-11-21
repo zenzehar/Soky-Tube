@@ -75,7 +75,18 @@ public class PlaybackActivity extends LeanbackActivity {
                 mMobileUnlockSurfacePending = true;
                 mMobileWakeRepairAttempts = 0;
                 mOpenBrowseAfterPip = false;
-                if (mPlaybackFragment != null && mPlaybackFragment.getPlayWhenReady()) {
+                if (mPlaybackFragment != null &&
+                        (mPlaybackFragment.getPlayWhenReady() ||
+                         MobileCarPlaybackPolicy.keepPausedSession(
+                                 MobilePlaybackService.hasCarMediaBrowserClient(),
+                                 mMobileAudioOnly,
+                                 mPlaybackFragment.isEngineInitialized() &&
+                                         mPlaybackFragment.getVideo() != null,
+                                 isFinishing(), false))) {
+                    // A paused car session must remain bound to ExoPlayer
+                    // across screen-off. Previously only a PLAYING video set
+                    // this flag, so Fragment.onStop released paused audio
+                    // and Android Auto needed a phone unlock to resume.
                     mPlaybackFragment.keepMobilePlaybackInBackground(true);
                     MobilePlaybackService.start(PlaybackActivity.this);
                 }
@@ -480,6 +491,17 @@ public class PlaybackActivity extends LeanbackActivity {
                     mMobilePipSessionActive, mMobileAudioOnly,
                     mMobilePipTransition, isChangingConfigurations(), isFinishing())) {
                 stopClosedMobilePip();
+            } else if (MobileCarPlaybackPolicy.keepPausedSession(
+                    MobilePlaybackService.hasCarMediaBrowserClient(),
+                    mMobileAudioOnly,
+                    mPlaybackFragment.isEngineInitialized() &&
+                            mPlaybackFragment.getVideo() != null,
+                    isFinishing(),
+                    mMobilePipSessionActive && !isInPipMode())) {
+                // onStop happens BEFORE Fragment.onStop; retain its decoder
+                // and the MediaSessionConnector even while playWhenReady=false.
+                mPlaybackFragment.keepMobilePlaybackInBackground(true);
+                MobilePlaybackService.start(this);
             } else if (mPlaybackFragment.getPlayWhenReady()) {
                 mPlaybackFragment.keepMobilePlaybackInBackground(true);
             }
@@ -694,6 +716,19 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override
     protected void onPause() {
         mMobileInForeground = false;
+        if (MobileUi.isHandheld(this) && mPlaybackFragment != null &&
+                MobileCarPlaybackPolicy.keepPausedSession(
+                        MobilePlaybackService.hasCarMediaBrowserClient(),
+                        mMobileAudioOnly, mPlaybackFragment.isEngineInitialized() &&
+                                mPlaybackFragment.getVideo() != null,
+                        isFinishing(),
+                        mMobilePipSessionActive && !isInPipMode())) {
+            // Start/retain the media playback service while this Activity is
+            // still transitioning to the background, BEFORE a locked device
+            // restricts new foreground-service launches.
+            mPlaybackFragment.keepMobilePlaybackInBackground(true);
+            MobilePlaybackService.start(this);
+        }
         boolean hasDialogBug = AppDialogPresenter.instance(this).isDialogShown() && Build.VERSION.SDK_INT <= 23;
         boolean isScreenOff = getPlayerData().getBackgroundMode() != PlayerData.BACKGROUND_MODE_DEFAULT && Utils.isHardScreenOff(this);
 
