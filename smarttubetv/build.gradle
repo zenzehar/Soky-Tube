@@ -164,11 +164,11 @@ android {
         stcar {
             applicationId "com.sokytube.car"
             minSdkVersion 28
-            versionCode 2478
-            versionName "32.88-soky-car-surface-check"
+            versionCode 2479
+            versionName "32.89-soky-car-safety-audit"
             targetSdkVersion project.properties.compileSdkVersion
             matchingFallbacks = ["stmobile", "stbeta"]
-            resValue "string", "car_app_name", "Soky Tube (Car) - Surface Check"
+            resValue "string", "car_app_name", "Soky Tube (Car) - Safety Audit"
         }
         stmobile {
             // Independent install: never overwrites an existing SmartTube TV installation.
