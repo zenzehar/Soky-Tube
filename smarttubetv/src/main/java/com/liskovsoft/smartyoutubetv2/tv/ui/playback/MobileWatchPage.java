@@ -311,8 +311,24 @@ final class MobileWatchPage {
         inPip = pip;
         touchControls.setVisible(false);
         if (pip) touchControls.finishPipHandoff();
-        else touchControls.resetPipTransform();
+        else {
+            // The system has already animated PiP -> fullscreen. Running the
+            // earlier 260ms bounce on the TextureView subtree can leave a
+            // stale GPU buffer until a user touches the video or opens Recents.
+            touchControls.clearTransitionTransformImmediately();
+        }
         applyLayout();
+    }
+
+    void onFullscreenConfigurationChanged() {
+        touchControls.clearTransitionTransformImmediately();
+        applyLayout();
+    }
+
+    void onPlayerWindowFocusRestored() {
+        if (inPip) return;
+        touchControls.clearTransitionTransformImmediately();
+        videoFrame.postInvalidateOnAnimation();
     }
 
     void applyLayout() {
@@ -327,18 +343,18 @@ final class MobileWatchPage {
             videoFrame.setLayoutParams(params);
             return;
         }
+        // Change system bar state ONLY on a real portrait/fullscreen mode
+        // transition. Doing this inside every layout previously reconfigured
+        // the Android window repeatedly as the player resized, which can
+        // orphan an otherwise valid GPU video layer until window refocus.
+        activity.updateMobilePlayerWindowMode(landscape);
         if (landscape) {
             params.height = 0;
             params.weight = 1f;
             below.setVisibility(View.GONE);
-            activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            activity.getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         } else {
-            // Phone window policy accounts for the physical status/camera
-            // cutout; the player starts BELOW the OS bar, not behind it.
-            MobileSystemBars.ensure(activity, false);
+            // The phone window retains its real status/cutout safe area in
+            // portrait; video in landscape may extend into the screen edges.
             int width = screen.getWidth() > 0 ? screen.getWidth()
                     : activity.getResources().getDisplayMetrics().widthPixels;
             // Shorts are portrait videos: give them a tall portrait player,
@@ -361,6 +377,7 @@ final class MobileWatchPage {
     void toggleFullscreen() {
         boolean landscape = activity.getResources().getConfiguration().orientation ==
                 Configuration.ORIENTATION_LANDSCAPE;
+        touchControls.clearTransitionTransformImmediately();
         activity.setRequestedOrientation(landscape
                 ? ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                 : ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
