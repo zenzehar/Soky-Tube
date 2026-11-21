@@ -807,6 +807,9 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         // NOTE: No way to disable only a notifications. We need to disable the media session instead.
         boolean mobile = MobileUi.isHandheld(getContext());
         boolean disableNotifications = !mobile && getPlayerTweaksData().isPlaybackNotificationsDisabled();
+        // Atomically transfer the ONE MediaSession from service-owned Android
+        // Auto audio back to the foreground phone player, without two decoders.
+        if (mobile) MobilePlaybackService.fragmentSessionAttached();
         mMediaSession = mobile ? MobilePlaybackService.session(getContext())
                 : new MediaSessionCompat(getContext().getApplicationContext(),
                         getContext().getPackageName());
