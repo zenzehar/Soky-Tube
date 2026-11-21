@@ -122,10 +122,22 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus && MobileUi.isHandheld(this) && !isInPipMode()) {
-            if (getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE)
-                MobileSystemBars.ensure(this, false);
+            updateMobilePlayerWindowMode(
+                    getResources().getConfiguration().orientation ==
+                            Configuration.ORIENTATION_LANDSCAPE);
+            if (mMobileWatch != null) mMobileWatch.onPlayerWindowFocusRestored();
             scheduleMobileSurfaceRecovery();
+            if (mMobileRotationRecoveryPending)
+                scheduleMobileRotationVideoRecovery(0);
         }
+    }
+
+    /** Called from watch layout, but system window flags change only once per
+     * mode via MobileSystemBars. Video-frame resizing must never reapply them.
+     */
+    void updateMobilePlayerWindowMode(boolean landscape) {
+        if (MobileUi.isHandheld(this) && !isInPipMode())
+            MobileSystemBars.setVideoFullscreen(this, landscape);
     }
 
     /** Explicit touch control independent of the accelerometer setting. */
@@ -138,14 +150,15 @@ public class PlaybackActivity extends LeanbackActivity {
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
-            if (newConfig.orientation != Configuration.ORIENTATION_LANDSCAPE && !isInPipMode())
-                MobileSystemBars.ensure(this, false);
+            updateMobilePlayerWindowMode(
+                    newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE);
             mMobileRotationRecoveryPending = !isInPipMode();
             mMobileRotationFrameMeasured = false;
             mMobileRotationMeasuredAtMs = android.os.SystemClock.uptimeMillis();
             mMobileRotationSurfaceBound = false;
             mMobileRotationGeneration++;
-            if (mMobileWatch != null) mMobileWatch.applyLayout();
+            if (mMobileWatch != null)
+                mMobileWatch.onFullscreenConfigurationChanged();
             // Rebind only AFTER the responsive 16:9 container has measured
             // its new dimensions, otherwise controls use the old orientation.
             getWindow().getDecorView().post(() -> {
@@ -437,9 +450,10 @@ public class PlaybackActivity extends LeanbackActivity {
             if (isMobileScreenInteractive() && !isMobileKeyguardLocked())
                 mMobileScreenOff = false;
         }
-        if (MobileUi.isHandheld(this) && !isInPipMode() &&
-                getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE)
-            MobileSystemBars.ensure(this, false);
+        if (MobileUi.isHandheld(this) && !isInPipMode())
+            updateMobilePlayerWindowMode(
+                    getResources().getConfiguration().orientation ==
+                            Configuration.ORIENTATION_LANDSCAPE);
         if (mMobileWatch != null) mMobileWatch.resume();
         if (MobileUi.isHandheld(this)) {
             mMobileAudioOnly = false;
