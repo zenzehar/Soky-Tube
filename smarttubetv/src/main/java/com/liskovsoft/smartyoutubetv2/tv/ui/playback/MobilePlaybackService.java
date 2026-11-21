@@ -50,6 +50,8 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     private static MobilePlaybackService activeService;
     private static volatile boolean explicitAudioOnly;
     private static volatile boolean carMediaBrowserConnected;
+    // Set by Activity while Android animates into PiP or PiP is visible.
+    private static volatile boolean floatingPlaybackExpected;
 
     /**
      * A media browser from Android Auto may remain connected while the car
@@ -75,6 +77,19 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
 
     static void setExplicitAudioOnly(boolean allowed) {
         explicitAudioOnly = allowed;
+    }
+
+    static void setFloatingPlaybackExpected(boolean expected) {
+        floatingPlaybackExpected = expected;
+    }
+
+    private void recordMobileServiceEvent(String event) {
+        getSharedPreferences("soky_video_diagnostics", MODE_PRIVATE).edit()
+                .putString("last_service_event",
+                        android.os.SystemClock.elapsedRealtime() + "ms: " + event +
+                        " / floatingExpected=" + floatingPlaybackExpected +
+                        " / audioOnly=" + explicitAudioOnly +
+                        " / foreground=" + foreground).apply();
     }
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean foreground;
@@ -139,6 +154,7 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
      */
     public static void stop(Context context) {
         explicitAudioOnly = false;
+        floatingPlaybackExpected = false;
         if (activeService != null) activeService.stopForegroundAndSelf();
         else context.stopService(new Intent(context, MobilePlaybackService.class));
     }
@@ -314,13 +330,28 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     }
 
     @Override public void onTaskRemoved(Intent rootIntent) {
-        // Dismissing a floating window or removing the task must not orphan a
-        // playing notification. Explicit user-requested background AUDIO is
-        // the one exception, and remains available for car controls.
-        if (!explicitAudioOnly) {
+        // Android/OEM may report task removal while automatic PiP is entering
+        // or while the floating video remains visible. That callback is NOT
+        // equivalent to a user pressing Pause or dismissing PiP.
+        recordMobileServiceEvent("onTaskRemoved");
+        if (MobilePipServicePolicy.shouldPauseOnTaskRemoved(
+                explicitAudioOnly, floatingPlaybackExpected)) {
             if (sharedSession != null)
                 sharedSession.getController().getTransportControls().pause();
             stopForegroundAndSelf();
+        } else if (!explicitAudioOnly) {
+            // If the PiP callback never arrives, the Activity's 3-second
+            // handoff watchdog must clear the flag. Never orphan a service
+            // after a true user dismissal.
+            handler.postDelayed(() -> {
+                if (MobilePipServicePolicy.shouldPauseOnTaskRemoved(
+                        explicitAudioOnly, floatingPlaybackExpected)) {
+                    recordMobileServiceEvent("task-removed-after-pip-handoff");
+                    if (sharedSession != null)
+                        sharedSession.getController().getTransportControls().pause();
+                    stopForegroundAndSelf();
+                }
+            }, 3500);
         }
         super.onTaskRemoved(rootIntent);
     }
