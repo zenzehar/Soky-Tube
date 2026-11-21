@@ -82,8 +82,7 @@ public class PlaybackActivity extends LeanbackActivity {
                          MobileCarPlaybackPolicy.keepPausedSession(
                                  MobilePlaybackService.hasCarMediaBrowserClient(),
                                  mMobileAudioOnly,
-                                 mPlaybackFragment.isEngineInitialized() &&
-                                         mPlaybackFragment.getVideo() != null,
+                                 mPlaybackFragment.hasMobilePreparedMedia(),
                                  isFinishing(), false))) {
                     // A paused car session must remain bound to ExoPlayer
                     // across screen-off. Previously only a PLAYING video set
@@ -561,8 +560,7 @@ public class PlaybackActivity extends LeanbackActivity {
             } else if (MobileCarPlaybackPolicy.keepPausedSession(
                     MobilePlaybackService.hasCarMediaBrowserClient(),
                     mMobileAudioOnly,
-                    mPlaybackFragment.isEngineInitialized() &&
-                            mPlaybackFragment.getVideo() != null,
+                    mPlaybackFragment.hasMobilePreparedMedia(),
                     isFinishing(),
                     mMobilePipSessionActive && !isInPipMode())) {
                 // onStop happens BEFORE Fragment.onStop; retain its decoder
@@ -786,8 +784,7 @@ public class PlaybackActivity extends LeanbackActivity {
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null &&
                 MobileCarPlaybackPolicy.keepPausedSession(
                         MobilePlaybackService.hasCarMediaBrowserClient(),
-                        mMobileAudioOnly, mPlaybackFragment.isEngineInitialized() &&
-                                mPlaybackFragment.getVideo() != null,
+                        mMobileAudioOnly, mPlaybackFragment.hasMobilePreparedMedia(),
                         isFinishing(),
                         mMobilePipSessionActive && !isInPipMode())) {
             // Start/retain the media playback service while this Activity is
