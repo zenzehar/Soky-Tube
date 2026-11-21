@@ -44,4 +44,27 @@ public class MobilePipLifecyclePolicyTest {
                 true, false, false, false, true));
     }
 
+    @Test public void android12HomeAutoPipHandoffDoesNotStopVideoBeforePipCallback() {
+        // An old confirmed PiP state and a transient PiP=false onStop must not
+        // be interpreted as a user dismissal while auto-enter is in progress.
+        assertFalse(MobilePipLifecyclePolicy.shouldStopOnStop(
+                true, false, true, false, false));
+        assertFalse(MobilePipLifecyclePolicy.shouldStopAfterPipExit(
+                true, false, false, false, false, true));
+    }
+
+    @Test public void realPipDismissalAfterHandoffStillStops() {
+        assertTrue(MobilePipLifecyclePolicy.shouldStopAfterPipExit(
+                true, false, false, false, false, false));
+        assertTrue(MobilePipLifecyclePolicy.shouldStopOnStop(
+                true, false, false, false, false));
+    }
+
+    @Test public void visiblePipAndResumedPlayerNeverStopDuringTransition() {
+        assertFalse(MobilePipLifecyclePolicy.shouldStopAfterPipExit(
+                true, false, false, true, false, false));
+        assertFalse(MobilePipLifecyclePolicy.shouldStopAfterPipExit(
+                true, true, false, false, false, false));
+    }
+
 }

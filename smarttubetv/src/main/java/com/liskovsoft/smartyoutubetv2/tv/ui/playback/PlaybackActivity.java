@@ -53,6 +53,8 @@ public class PlaybackActivity extends LeanbackActivity {
     private MobileWatchPage mMobileWatch;
     private boolean mMobileAudioOnly;
     private boolean mMobilePipTransition;
+    // Android 12+ Home auto-PiP can dispatch onStop before PiP=true arrives.
+    private boolean mMobileAutoPipHandoffPending;
     private boolean mMobilePipSessionActive;
     private boolean mOpenBrowseAfterPip;
     private boolean mBrowseLaunchedForPip;
@@ -468,6 +470,7 @@ public class PlaybackActivity extends LeanbackActivity {
         MobilePlaybackService.setExplicitAudioOnly(false);
         mMobilePipSessionActive = false;
         mMobilePipTransition = false;
+        mMobileAutoPipHandoffPending = false;
         mOpenBrowseAfterPip = false;
         mPlaybackFragment.setPlayWhenReady(false);
         mPlaybackFragment.keepMobilePlaybackInBackground(false);
@@ -540,6 +543,7 @@ public class PlaybackActivity extends LeanbackActivity {
             if (!isInPipMode()) {
                 mMobilePipSessionActive = false;
                 mMobilePipTransition = false;
+                mMobileAutoPipHandoffPending = false;
             }
             updateMobilePipParams();
             scheduleMobileSurfaceRecovery();
@@ -555,7 +559,8 @@ public class PlaybackActivity extends LeanbackActivity {
             // Those conditions previously let the audio service escape.
             if (!isInPipMode() && MobilePipLifecyclePolicy.shouldStopOnStop(
                     mMobilePipSessionActive, mMobileAudioOnly,
-                    mMobilePipTransition, isChangingConfigurations(), isFinishing())) {
+                    mMobilePipTransition || mMobileAutoPipHandoffPending,
+                    isChangingConfigurations(), isFinishing())) {
                 stopClosedMobilePip();
             } else if (MobileCarPlaybackPolicy.keepPausedSession(
                     MobilePlaybackService.hasCarMediaBrowserClient(),
@@ -856,6 +861,7 @@ public class PlaybackActivity extends LeanbackActivity {
             if (isInPictureInPictureMode) {
                 mMobilePipSessionActive = true;
                 mMobilePipTransition = false;
+                mMobileAutoPipHandoffPending = false;
                 if (mPlaybackFragment != null) {
                     // Android 12 may enter PiP automatically, bypassing
                     // enterMobilePip(), so retain the SAME decoder/session.
@@ -873,7 +879,8 @@ public class PlaybackActivity extends LeanbackActivity {
                 getWindow().getDecorView().postDelayed(() -> {
                     if (MobilePipLifecyclePolicy.shouldStopAfterPipExit(
                             mMobilePipSessionActive, mMobileInForeground,
-                            mMobileAudioOnly, isInPipMode(), isChangingConfigurations())) {
+                            mMobileAudioOnly, isInPipMode(), isChangingConfigurations(),
+                            mMobileAutoPipHandoffPending)) {
                         stopClosedMobilePip();
                     }
                 }, 500);
@@ -904,8 +911,24 @@ public class PlaybackActivity extends LeanbackActivity {
                 // a power-button lock as this action.
                 mPlaybackFragment.keepMobilePlaybackInBackground(true);
                 MobilePlaybackService.start(this);
-                if (Build.VERSION.SDK_INT < 31) enterMobilePip(false);
-                else updateMobilePipParams(); // prepared earlier for OS animation
+                if (Build.VERSION.SDK_INT < 31) {
+                    enterMobilePip(false);
+                } else {
+                    // Home does NOT necessarily deliver PiP=true before onStop.
+                    // Prevent the PiP-dismissal path from pausing a still-playing
+                    // video during the Android 12+ automatic PiP handoff.
+                    mMobileAutoPipHandoffPending = true;
+                    updateMobilePipParams(); // preserve the OS auto-enter animation
+                    getWindow().getDecorView().postDelayed(() -> {
+                        if (!mMobileAutoPipHandoffPending) return;
+                        mMobileAutoPipHandoffPending = false;
+                        // No successful PiP callback: fail closed rather than
+                        // leave an invisible player/audio service running.
+                        if (!isInPipMode() && !mMobileInForeground &&
+                                !mMobileAudioOnly && mPlaybackFragment != null)
+                            stopClosedMobilePip();
+                    }, 3000);
+                }
             }
             return;
         }

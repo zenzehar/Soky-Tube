@@ -19,6 +19,7 @@ on:
       - 'fix/mobile-v7-12-*'
       - 'fix/mobile-v7-13-*'
       - 'fix/mobile-v7-14-*'
+      - 'fix/mobile-v7-15-*'
   workflow_dispatch:
 
 concurrency:
@@ -104,8 +105,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-14-android12-media-session-20261121 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.14 - Android 12+ Media Session Crash Fix (21 Nov 2026)" \
-            --notes "Fix crash on Android 12+ on playback screen: MediaSessionCompat in the v7.13 phone APK created a media-button PendingIntent without FLAG_IMMUTABLE or FLAG_MUTABLE. v7.14 explicitly creates an immutable, receiver-targeted media-button PendingIntent and passes it to the shared MediaSessionCompat. AndroidX Media is upgraded from 1.2.0 to patched 1.4.3 for the mobile flavor only. Includes API 17-36 flag regression tests. Preserves v7.13 fullscreen/PiP compositor fixes, Android Auto paused lock-screen retention, player, notifications and background-audio policy. TV flavors are unchanged. Physical Android 12+ and car/PiP tests are still required." \
+          gh release create mobile-preview-v7-15-home-pip-playback-20261121 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.15 - Home Gesture PiP Playback Continuity (21 Nov 2026)" \
+            --notes "v7.15 protects playback while the user leaves via Home on Android 12+ auto-PiP. Tracks a pending Home-to-PiP handoff separately from the explicit minimize animation so premature onStop / PiP=false callbacks cannot treat the transition as a PiP dismissal and pause the video. Clears the state on confirmed PiP entry or foreground resume; stops background playback after 3 seconds if PiP never materializes, to avoid orphaned audio. Adds regression tests for Home entry, genuine PiP dismissal, and expansion. Retains v7.14 Android 12+ immutable media-button PendingIntent crash fix, fullscreen GPU transition corrections and Android Auto paused-resume support; TV flavor unchanged. Device testing is required." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-14-android12-media-session-20261121 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-15-home-pip-playback-20261121 dist/*.apk dist/SHA256SUMS.txt --clobber
