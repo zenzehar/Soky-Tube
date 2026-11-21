@@ -163,11 +163,7 @@ public class PlaybackActivity extends LeanbackActivity {
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
             updateMobilePlayerWindowMode(
                     newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE);
-            mMobileRotationRecoveryPending = !isInPipMode();
-            mMobileRotationFrameMeasured = false;
-            mMobileRotationMeasuredAtMs = android.os.SystemClock.uptimeMillis();
-            mMobileRotationSurfaceBound = false;
-            mMobileRotationGeneration++;
+            beginMobileVisualTransitionRecovery();
             if (mMobileWatch != null)
                 mMobileWatch.onFullscreenConfigurationChanged();
             // Rebind only AFTER the responsive 16:9 container has measured
@@ -182,6 +178,20 @@ public class PlaybackActivity extends LeanbackActivity {
             // ExoPlayer continues outputting audio.
             scheduleMobileRotationVideoRecovery(0);
         }
+    }
+
+    /**
+     * Enter a compositor recovery epoch for either screen orientation OR
+     * system PiP expansion. Both can invalidate the displayed texture even
+     * though the decoder keeps playing audio. The existing recovery loop
+     * waits for a freshly composited frame after layout changes.
+     */
+    private void beginMobileVisualTransitionRecovery() {
+        mMobileRotationRecoveryPending = !isInPipMode();
+        mMobileRotationFrameMeasured = false;
+        mMobileRotationMeasuredAtMs = android.os.SystemClock.uptimeMillis();
+        mMobileRotationSurfaceBound = false;
+        mMobileRotationGeneration++;
     }
 
     /** A configuration event precedes the actual fullscreen frame resize.
@@ -776,6 +786,14 @@ public class PlaybackActivity extends LeanbackActivity {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
 
         mPlaybackFragment.onPIPChanged(isInPictureInPictureMode);
+        if (MobileUi.isHandheld(this) && !isInPictureInPictureMode &&
+                mMobilePipSessionActive) {
+            // Native PiP expanded: the operating system has already done
+            // the window animation. Reset the touch transform immediately
+            // and verify the FIRST new composited video frame. There may be
+            // no orientation change, so onConfigurationChanged isn't called.
+            beginMobileVisualTransitionRecovery();
+        }
         if (mMobileWatch != null) {
             mMobileWatch.setPipMode(isInPictureInPictureMode);
             mMobileWatch.setControlsShown(!isInPictureInPictureMode);
