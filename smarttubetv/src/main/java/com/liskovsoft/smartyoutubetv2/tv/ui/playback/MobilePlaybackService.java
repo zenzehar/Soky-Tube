@@ -341,22 +341,6 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
             if (sharedSession != null)
                 sharedSession.getController().getTransportControls().pause();
             stopForegroundAndSelf();
-        } else if (!explicitAudioOnly) {
-            // If the PiP callback never arrives, the Activity's 3-second
-            // handoff watchdog must clear the flag. Never orphan a service
-            // after a true user dismissal.
-            handler.postDelayed(() -> {
-                // Ignore a stale task callback from a service instance that
-                // has already been replaced by another playback session.
-                if (activeService != MobilePlaybackService.this) return;
-                if (MobilePipServicePolicy.shouldPauseOnTaskRemoved(
-                        explicitAudioOnly, floatingPlaybackExpected)) {
-                    recordMobileServiceEvent("task-removed-after-pip-handoff");
-                    if (sharedSession != null)
-                        sharedSession.getController().getTransportControls().pause();
-                    stopForegroundAndSelf();
-                }
-            }, 3500);
         }
         super.onTaskRemoved(rootIntent);
     }
