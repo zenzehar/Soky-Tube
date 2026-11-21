@@ -24,7 +24,7 @@ public final class SokyCarProbeActivity extends Activity {
         notice.setGravity(Gravity.CENTER);
         int padding = (int) (20 * getResources().getDisplayMetrics().density);
         notice.setPadding(padding, padding, padding, padding);
-        notice.setText("Soky Tube Car - Safety Audit\n\n" +
+        notice.setText("Soky Tube Car - Passenger Display Test\n\n" +
                 "The car has opened Soky Tube's own display.\n\n" +
                 SokyCarPlaybackGate.diagnosticState() + "\n" +
                 SokyCarPlaybackGate.blockReason());
