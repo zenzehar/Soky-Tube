@@ -162,8 +162,8 @@ android {
         stmobile {
             // Independent install: never overwrites an existing SmartTube TV installation.
             applicationId "com.sokytube.mobile"
-            versionCode 2471
-            versionName "32.81-soky-v7.13-window-transition-car-resume"
+            versionCode 2472
+            versionName "32.82-soky-v7.14-android12-media-session"
             targetSdkVersion project.properties.compileSdkVersion
             matchingFallbacks = ["stbeta"]
         }
@@ -198,6 +198,9 @@ dependencies {
     implementation 'androidx.recyclerview:recyclerview:' + recyclerviewXVersion // exoplayer 2.12.1 fix
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0' // phone spring pull-to-refresh
     implementation 'androidx.media:media:' + mediaXVersion // exoplayer fix
+    // Media 1.2.0 creates a flag-less PendingIntent in MediaSessionCompat on Android 12+.
+    // Upgrade PHONE only; leave TV flavours and their legacy dependency untouched.
+    stmobileImplementation 'androidx.media:media:1.4.3'
     implementation 'androidx.constraintlayout:constraintlayout:' + constraintLayoutXVersion
 
     implementation 'com.github.bumptech.glide:glide:' + glideVersion
