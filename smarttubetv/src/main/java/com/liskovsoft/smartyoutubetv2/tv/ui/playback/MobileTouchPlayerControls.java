@@ -469,6 +469,31 @@ final class MobileTouchPlayerControls {
         videoContainer.setPivotY(videoContainer.getHeight() / 2f);
     }
 
+    /**
+     * Native PiP expansion and orientation switches must NEVER run an
+     * extra ViewPropertyAnimator on the whole video/TextureView hierarchy.
+     * A pending GPU transform can retain an old buffer; Android's task
+     * switcher or a user touch then forces the apparent "unfreeze".
+     *
+     * Keep the existing gesture morph on entry and the bounce-back animation
+     * for an aborted finger drag; only settled window transitions snap.
+     */
+    void clearTransitionTransformImmediately() {
+        draggingToPip = false;
+        videoContainer.animate().cancel();
+        videoContainer.clearAnimation();
+        videoContainer.setTranslationX(0f);
+        videoContainer.setTranslationY(0f);
+        videoContainer.setScaleX(1f);
+        videoContainer.setScaleY(1f);
+        videoContainer.setElevation(0f);
+        videoContainer.setPivotX(videoContainer.getWidth() / 2f);
+        videoContainer.setPivotY(videoContainer.getHeight() / 2f);
+        videoContainer.setLayerType(View.LAYER_TYPE_NONE, null);
+        videoContainer.requestLayout();
+        videoContainer.invalidate();
+    }
+
     void resetPipTransform() {
         videoContainer.animate().cancel();
         videoContainer.animate().translationX(0f).translationY(0f)
