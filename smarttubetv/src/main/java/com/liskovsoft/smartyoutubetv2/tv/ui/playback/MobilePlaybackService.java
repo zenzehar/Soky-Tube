@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.media.MediaMetadata;
@@ -83,8 +84,18 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
      * MediaSessionConnector instance owned by the existing player. */
     public static synchronized MediaSessionCompat session(Context context) {
         if (sharedSession == null) {
-            sharedSession = new MediaSessionCompat(context.getApplicationContext(),
-                    "SokyTubeMobile");
+            // Android 12+ rejects the implicit, flag-less PendingIntent created
+            // by legacy MediaSessionCompat(Context, String). Supply an explicit,
+            // immutable media-button broadcast instead. Keep media buttons
+            // routed to the existing AndroidX MediaButtonReceiver and ONE player.
+            Context appContext = context.getApplicationContext();
+            ComponentName receiver = new ComponentName(appContext, MediaButtonReceiver.class);
+            Intent mediaButton = new Intent(Intent.ACTION_MEDIA_BUTTON).setComponent(receiver);
+            PendingIntent mediaButtonPendingIntent = PendingIntent.getBroadcast(
+                    appContext, 0, mediaButton,
+                    MobileMediaButtonIntentPolicy.flags(Build.VERSION.SDK_INT));
+            sharedSession = new MediaSessionCompat(appContext, "SokyTubeMobile",
+                    receiver, mediaButtonPendingIntent);
             sharedSession.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS |
                     MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
         }
