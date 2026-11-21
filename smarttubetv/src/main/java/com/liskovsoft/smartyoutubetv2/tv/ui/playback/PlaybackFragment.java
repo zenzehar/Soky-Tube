@@ -859,6 +859,17 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
         });
 
         if (mobile) {
+            // Exact +/-10 s Android Auto actions, exposed via the SAME existing
+            // media session. They do not create a second player or seek live
+            // streams that the decoder marks non-seekable.
+            mMediaSessionConnector.setCustomActionProviders(
+                    mobileCarSeekAction(MobilePlaybackService.ACTION_SEEK_BACK_10,
+                            "Back 10 seconds", R.drawable.mobile_ic_back_10, false),
+                    mobileCarSeekAction(MobilePlaybackService.ACTION_SEEK_FORWARD_10,
+                            "Forward 10 seconds", R.drawable.mobile_ic_forward_10, true));
+        }
+
+        if (mobile) {
             // Android Auto marks the Now Playing node as PLAYABLE and sends
             // PLAY_FROM_MEDIA_ID when tapped. Without a PlaybackPreparer the
             // legacy MediaSessionConnector ignores that request, giving a
@@ -904,6 +915,37 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
                 return super.dispatchSetPlayWhenReady(player, playWhenReady);
             }
         });
+    }
+
+    private MediaSessionConnector.CustomActionProvider mobileCarSeekAction(
+            String actionName, String label, int icon, boolean forward) {
+        return new MediaSessionConnector.CustomActionProvider() {
+            @Override public PlaybackStateCompat.CustomAction getCustomAction(Player player) {
+                // A paused prepared item remains seekable from Android Auto,
+                // including while the phone screen is locked.
+                if (player == null || mExoPlayerController == null ||
+                        !mExoPlayerController.containsMedia() ||
+                        !player.isCurrentWindowSeekable() ||
+                        mExoPlayerController.isSeekBlocked())
+                    return null;
+                return new PlaybackStateCompat.CustomAction.Builder(
+                        actionName, label, icon).build();
+            }
+
+            @Override public void onCustomAction(Player player,
+                    ControlDispatcher controlDispatcher, String action, Bundle extras) {
+                if (!actionName.equals(action) || player == null ||
+                        mExoPlayerController == null ||
+                        !mExoPlayerController.containsMedia()) return;
+                long destination = MobileCarSeekPolicy.targetMs(
+                        player.getCurrentPosition(), player.getDuration(),
+                        player.isCurrentWindowSeekable() &&
+                                !mExoPlayerController.isSeekBlocked(), forward);
+                if (destination >= 0)
+                    controlDispatcher.dispatchSeekTo(
+                            player, player.getCurrentWindowIndex(), destination);
+            }
+        };
     }
 
     private void initializePlayerRows() {
