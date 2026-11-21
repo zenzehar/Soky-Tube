@@ -316,7 +316,10 @@ public class BrowseActivity extends LeanbackActivity {
     }
 
     private void hideDiscoveryPage() {
+        boolean wasShown = mMobileDiscovery != null && mMobileDiscovery.isShown();
         if (mMobileDiscovery != null) mMobileDiscovery.hide();
+        if (wasShown && mMobileMain != null)
+            mMobileMain.setVisibility(View.VISIBLE);
         if (mMobileTitle != null) mMobileTitle.setText("Soky Tube");
     }
 
