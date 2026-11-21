@@ -66,9 +66,15 @@ public final class SokyCarProbeService extends CarAppService {
                                                 .getCarService(ScreenManager.class)
                                                 .push(new SokyCarSurfaceProbeScreen(getCarContext())))
                                         .build())
+                                .addAction(new Action.Builder()
+                                        .setTitle("Passenger Check")
+                                        .setOnClickListener(() -> getCarContext()
+                                                .getCarService(ScreenManager.class)
+                                                .push(new SokyCarPassengerDisplayScreen(getCarContext())))
+                                        .build())
                                 .build();
                         return new PaneTemplate.Builder(pane)
-                                .setTitle("Soky Tube Car - Safety Audit")
+                                .setTitle("Soky Tube Car - Passenger Display Test")
                                 .setHeaderAction(Action.APP_ICON)
                                 .build();
                     }
