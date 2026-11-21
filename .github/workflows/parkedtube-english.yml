@@ -1,0 +1,64 @@
+name: ParkedTube English - experimental APK
+
+on:
+  push:
+    branches:
+      - experiment/parkedtube-english-20261121
+    paths:
+      - 'experiments/parkedtube-english/**'
+      - '.github/workflows/parkedtube-english.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-english-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout English patch and launcher diagnostics
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Checkout ParkedTube v1.5.0 (noncommercial)
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: gadmin2151/ParkedTube
+          ref: v1.5.0
+          path: upstream
+          persist-credentials: false
+      - name: Translate UI and remove Russian keyboard
+        working-directory: upstream
+        run: python3 ../experiments/parkedtube-english/translate_parkedtube.py
+      - name: Check native English-only resources and launcher declarations
+        working-directory: upstream
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          m = ET.parse('app/src/main/AndroidManifest.xml').getroot()
+          ns = '{http://schemas.android.com/apk/res/android}'
+          application = m.find('application')
+          assert application.get(ns + 'appCategory') == 'game'
+          categories = [x.get(ns + 'name') for x in m.findall('.//category')]
+          assert 'android.intent.category.CAR_LAUNCHER' in categories
+          assert 'android.intent.category.LAUNCHER' in categories
+          t = Path('app/src/main/res/values/strings.xml').read_text()
+          assert 'ParkedTube English' in t
+          assert not any('\u0400' <= c <= '\u04ff' for c in t)
+          print('PASS: English strings and original parked-game launcher declarations.')
+          print('NOTE: Manifest eligibility is not proof of Android Auto host acceptance.')
+          PY
+      - name: Build debug APK with upstream Docker toolchain
+        working-directory: upstream
+        run: |
+          chmod +x scripts/build-apk.sh
+          ./scripts/build-apk.sh debug
+      - name: Upload installable English test APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ParkedTube-English-Debug-APK
+          path: |
+            upstream/outputs/ParkedTube-debug.apk
+            upstream/outputs/ParkedTube-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 14
