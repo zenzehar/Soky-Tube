@@ -22,6 +22,7 @@ on:
       - 'fix/mobile-v7-15-*'
       - 'feature/mobile-v7-16-*'
       - 'feature/mobile-v7-17-*'
+      - 'fix/mobile-v7-18-*'
   workflow_dispatch:
 
 concurrency:
@@ -99,6 +100,9 @@ jobs:
       - name: Test Android Auto exact 10-second seek boundaries
         run: |
           ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileCarSeekPolicyTest"
+      - name: Test Android Auto cold resumption without unlocking phone
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileCarResumePolicyTest"
       - name: Build installable debug-signed mobile APK
         run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
@@ -119,8 +123,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-17-discover-pull-only-auto-seek-20261121 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.17 - Discover Pull Refresh, PiP Continuity & Android Auto 10s Seek (21 Nov 2026)" \
-            --notes "v7.17 introduces a separate general-interest Discover tab without changing the original Home or News pages. It mixes Home recommendations (60%), subscriptions (25%) and trends (15%) with on-device interests from recent watch history. Only an initial open fetches automatically; afterward only a user pull down from the feed top refreshes. Scrolling, returning, account callbacks and Activity.onResume do not refresh. Minimizing into PiP now protects the existing media session against spurious onTaskRemoved callbacks and records the cause in privacy-safe diagnostics while real PiP dismissal still stops audio. Android Auto gains custom Back 10 seconds and Forward 10 seconds controls with seek bounds; car hosts may put custom actions in the overflow menu. Retains prior screen-lock, Android Auto and Android 12 crash fixes. TV remains unchanged. Physical-device validation is required." \
+          gh release create mobile-preview-v7-18-car-cold-resume-20261121 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.18 - Android Auto Locked-Phone Resume (21 Nov 2026)" \
+            --notes "v7.18 fixes Android Auto Play being unresponsive when the phone remains locked, its player Activity is destroyed or a new car connection arrives after a long pause. Remembers the last non-incognito video and position locally; preserves a playable media browse item and implements an explicit user-initiated Play fallback inside a service-owned AUDIO-ONLY ExoPlayer. Resolves a fresh video stream, avoids waking the phone, and transfers MediaSession ownership cleanly when the phone Activity opens. No playback starts solely from car connection, preserving Android Auto requirements. Retains v7.17 Discover pull-only feed, PiP continuity and car +/-10-second media actions, and v7.16 screen-lock protections. Android Auto video on the car display is NOT implemented because ordinary media sessions do not support projected video and native parked video is not supported on general Android Auto devices. TV flavor unchanged. Device testing essential." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-17-discover-pull-only-auto-seek-20261121 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-18-car-cold-resume-20261121 dist/*.apk dist/SHA256SUMS.txt --clobber
