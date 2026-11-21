@@ -203,6 +203,25 @@ public final class MobileVideoFeed {
         setItems(next);
     }
 
+    /** Standalone Discover feed: immutable screen snapshot until a manual swipe.
+     * No Leanback pagination event or provider adapter can reorder these cards. */
+    public void setDiscoverVideos(List<Video> videos, boolean resetToTop) {
+        ArrayList<FeedItem> items = new ArrayList<>();
+        if (videos != null) {
+            for (Video video : videos) {
+                if (video != null && !TextUtils.isEmpty(video.videoId) &&
+                        !video.isChapter && !video.isUpcoming)
+                    items.add(new FeedItem(video, "Discover"));
+            }
+        }
+        setItems(items);
+        if (resetToTop) list.post(() -> list.scrollToPosition(0));
+    }
+
+    public void finishManualRefresh() {
+        swipeRefresh.setRefreshing(false);
+    }
+
     public void setVideos(ObjectAdapter videos, String category) {
         ArrayList<FeedItem> next = new ArrayList<>();
         if (videos != null) {
