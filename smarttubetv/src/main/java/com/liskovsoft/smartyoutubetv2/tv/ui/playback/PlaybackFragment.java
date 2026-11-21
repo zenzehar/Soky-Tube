@@ -1424,7 +1424,11 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
             return null;
         }
 
-        return mExoPlayerController.getVideo();
+        Video selected = mExoPlayerController.getVideo();
+        // The mobile player owns the current video's metadata while an
+        // Android Auto/notification controller may still request it after
+        // a long background pause. Never depend on a cleared weak reference.
+        return selected != null ? selected : mMobileCurrentVideo;
     }
 
     @Override
