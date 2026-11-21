@@ -62,7 +62,13 @@ public class BrowseSectionFragmentFactory extends BrowseSupportFragment.Fragment
 
         switch (mFragmentType) {
             case BrowseSection.TYPE_ROW:
-                fragment = new VideoRowsFragment();
+                VideoRowsFragment rows = new VideoRowsFragment();
+                // The actual header identifies News even while selection is changing.
+                if (header instanceof SectionHeaderItem)
+                    rows.setMobileNewsSection(
+                            ((SectionHeaderItem) header).getSection().getId() ==
+                                    com.liskovsoft.mediaserviceinterfaces.data.MediaGroup.TYPE_NEWS);
+                fragment = rows;
                 break;
             case BrowseSection.TYPE_GRID:
                 fragment = new VideoGridFragment();

@@ -20,6 +20,7 @@ on:
       - 'fix/mobile-v7-13-*'
       - 'fix/mobile-v7-14-*'
       - 'fix/mobile-v7-15-*'
+      - 'feature/mobile-v7-16-*'
   workflow_dispatch:
 
 concurrency:
@@ -85,6 +86,12 @@ jobs:
       - name: Test Android 12+ media button PendingIntent mutability
         run: |
           ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileMediaButtonIntentPolicyTest"
+      - name: Test screen-lock playback continuity policy
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileScreenLockPolicyTest"
+      - name: Test personalized News diversity and refresh
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileNewsMixerTest"
       - name: Build installable debug-signed mobile APK
         run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
@@ -105,8 +112,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-15-home-pip-playback-20261121 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.15 - Home Gesture PiP Playback Continuity (21 Nov 2026)" \
-            --notes "v7.15 protects playback while the user leaves via Home on Android 12+ auto-PiP. Tracks a pending Home-to-PiP handoff separately from the explicit minimize animation so premature onStop / PiP=false callbacks cannot treat the transition as a PiP dismissal and pause the video. Clears the state on confirmed PiP entry or foreground resume; stops background playback after 3 seconds if PiP never materializes, to avoid orphaned audio. Adds regression tests for Home entry, genuine PiP dismissal, and expansion. Retains v7.14 Android 12+ immutable media-button PendingIntent crash fix, fullscreen GPU transition corrections and Android Auto paused-resume support; TV flavor unchanged. Device testing is required." \
+          gh release create mobile-preview-v7-16-news-lock-20261121 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.16 - Interest-Based News Refresh and Screen-Lock Retention (21 Nov 2026)" \
+            --notes "v7.16 mobile News only: refreshes News provider and reshuffles with diverse on-device interest weighting using watch history and subscribed channels, plus a capped mix from subscriptions and Home recommendations (70/20/10 target). Avoids repeats at the top when the candidate pool permits, with signed-out/provider-error fallbacks. The Home page remains identical. Screen lock: retain the current media session before the Activity pauses, avoid misidentifying a lock as PiP dismissal, and never override a user's intentional pause. Retains v7.15 Home-to-PiP and v7.14 Android 12+ PendingIntent fixes. Adds News mixer and lock-screen unit tests. This is a debug-signed preview; physical lock/PiP tests remain essential." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-15-home-pip-playback-20261121 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-16-news-lock-20261121 dist/*.apk dist/SHA256SUMS.txt --clobber

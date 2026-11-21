@@ -641,6 +641,18 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
         refresh(focusOnContent);
     }
 
+    /** Mobile News-only supplemental sources. The normal Home and Subscriptions
+     * sections keep their own observables and ordering unchanged. */
+    public Observable<MediaGroup> getMobileNewsSubscriptionsObserve() {
+        return getSignInService().isSigned()
+                ? getContentService().getSubscriptionsObserve()
+                : Observable.empty();
+    }
+
+    public Observable<List<MediaGroup>> getMobileNewsRecommendationsObserve() {
+        return getContentService().getHomeObserve();
+    }
+
     private void updateRefreshTime() {
         mLastUpdateTimeMs = System.currentTimeMillis();
     }

@@ -59,6 +59,9 @@ public class PlaybackActivity extends LeanbackActivity {
     private boolean mOpenBrowseAfterPip;
     private boolean mBrowseLaunchedForPip;
     private boolean mMobileScreenOff;
+    // Latch playback intent across OEMs that deliver Activity.onStop before SCREEN_OFF.
+    private boolean mMobileScreenLockRetention;
+    private boolean mMobileUserLeaveHintReceived;
     private boolean mMobileUnlockSurfacePending;
     private boolean mMobileInForeground;
     private int mMobileWakeRepairAttempts;
@@ -77,6 +80,8 @@ public class PlaybackActivity extends LeanbackActivity {
                 // never let the watch Activity appear over the keyguard.
                 mMobileScreenOff = true;
                 mMobileUnlockSurfacePending = true;
+                if (mPlaybackFragment != null && mPlaybackFragment.getPlayWhenReady())
+                    mMobileScreenLockRetention = true;
                 mMobileWakeRepairAttempts = 0;
                 mOpenBrowseAfterPip = false;
                 if (mPlaybackFragment != null &&
@@ -94,10 +99,13 @@ public class PlaybackActivity extends LeanbackActivity {
                     MobilePlaybackService.start(PlaybackActivity.this);
                 }
                 updateMobilePipParams(); // setAutoEnterEnabled(false)
+                captureMobileVideoDiagnostics("screen-off-received");
             } else if (Intent.ACTION_USER_PRESENT.equals(action)) {
                 // Screen on is NOT sufficient: wait for the real keyguard
                 // unlock (or an already-unlocked device) before surface repair.
                 mMobileScreenOff = false;
+                mMobileScreenLockRetention = false;
+                mMobileUserLeaveHintReceived = false;
                 scheduleMobileSurfaceRecovery();
                 updateMobilePipParams();
             }
@@ -268,7 +276,7 @@ public class PlaybackActivity extends LeanbackActivity {
         long lastFrameMs = mPlaybackFragment != null
                 ? mPlaybackFragment.lastMobileVideoFrameUptimeMs() : 0L;
         long nowMs = android.os.SystemClock.uptimeMillis();
-        return "Soky Tube mobile v7.13 playback diagnostics" +
+        return "Soky Tube mobile v7.16 playback diagnostics" +
                 "\nreason: " + reason +
                 "\nscreenOrientation: " + getResources().getConfiguration().orientation +
                 "\npiP: " + isInPipMode() +
@@ -287,7 +295,11 @@ public class PlaybackActivity extends LeanbackActivity {
                 "\nlastCompositedFrameAgoMs: " + (lastFrameMs > 0 ?
                         nowMs - lastFrameMs : -1) +
                 "\nrotationPending: " + mMobileRotationRecoveryPending +
-                "\ncarBrowserConnected: " + MobilePlaybackService.hasCarMediaBrowserClient();
+                "\ncarBrowserConnected: " + MobilePlaybackService.hasCarMediaBrowserClient() +
+                "\nscreenInteractive: " + isMobileScreenInteractive() +
+                "\nkeyguardLocked: " + isMobileKeyguardLocked() +
+                "\nlockRetained: " + mMobileScreenLockRetention +
+                "\nuserLeaveHint: " + mMobileUserLeaveHintReceived;
     }
 
     private void captureMobileVideoDiagnostics(String reason) {
@@ -314,6 +326,10 @@ public class PlaybackActivity extends LeanbackActivity {
     private boolean isMobileScreenInteractive() {
         PowerManager manager = (PowerManager) getSystemService(POWER_SERVICE);
         return manager == null || manager.isInteractive();
+    }
+
+    private boolean isMobileLockInProgress() {
+        return mMobileScreenOff || !isMobileScreenInteractive() || isMobileKeyguardLocked();
     }
 
     private boolean isMobileKeyguardLocked() {
@@ -527,8 +543,11 @@ public class PlaybackActivity extends LeanbackActivity {
         super.onResume();
         if (MobileUi.isHandheld(this)) {
             mMobileInForeground = true;
-            if (isMobileScreenInteractive() && !isMobileKeyguardLocked())
+            if (isMobileScreenInteractive() && !isMobileKeyguardLocked()) {
                 mMobileScreenOff = false;
+                mMobileScreenLockRetention = false;
+                mMobileUserLeaveHintReceived = false;
+            }
         }
         if (MobileUi.isHandheld(this) && !isInPipMode())
             updateMobilePlayerWindowMode(
@@ -557,7 +576,15 @@ public class PlaybackActivity extends LeanbackActivity {
             // PiP dismissal must end playback even if Android reports the
             // screen OFF or the power manager temporarily noninteractive.
             // Those conditions previously let the audio service escape.
-            if (!isInPipMode() && MobilePipLifecyclePolicy.shouldStopOnStop(
+            // Screen lock must not be classified as dismissing a floating PiP.
+            // Keep the active session through onStop even if SCREEN_OFF arrives late.
+            if (MobileScreenLockPolicy.retainOnStop(
+                    isMobileLockInProgress() || mMobileScreenLockRetention,
+                    !isFinishing(), mMobileScreenLockRetention,
+                    mPlaybackFragment.getPlayWhenReady())) {
+                mPlaybackFragment.keepMobilePlaybackInBackground(true);
+                MobilePlaybackService.start(this);
+            } else if (!isInPipMode() && MobilePipLifecyclePolicy.shouldStopOnStop(
                     mMobilePipSessionActive, mMobileAudioOnly,
                     mMobilePipTransition || mMobileAutoPipHandoffPending,
                     isChangingConfigurations(), isFinishing())) {
@@ -576,6 +603,8 @@ public class PlaybackActivity extends LeanbackActivity {
                 mPlaybackFragment.keepMobilePlaybackInBackground(true);
             }
         }
+        if (MobileUi.isHandheld(this) && isMobileLockInProgress())
+            captureMobileVideoDiagnostics("onStop-during-lock");
         super.onStop();
     }
     @Override
@@ -786,6 +815,21 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override
     protected void onPause() {
         mMobileInForeground = false;
+        if (MobileUi.isHandheld(this) && mPlaybackFragment != null && !isFinishing() &&
+                mPlaybackFragment.getPlayWhenReady()) {
+            // Foreground-service registration must precede screen-off/background
+            // restrictions. Merely retaining the session NEVER calls play().
+            mPlaybackFragment.keepMobilePlaybackInBackground(true);
+            MobilePlaybackService.start(this);
+            if (isMobileLockInProgress() || (!mMobileUserLeaveHintReceived &&
+                    !mMobilePipTransition && !mMobileAutoPipHandoffPending &&
+                    !isInPipMode())) {
+                // Some OEMs call onPause/onStop before ACTION_SCREEN_OFF and
+                // before PowerManager reflects the screen-lock transition.
+                mMobileScreenLockRetention = true;
+                captureMobileVideoDiagnostics("onPause-during-lock");
+            }
+        }
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null &&
                 MobileCarPlaybackPolicy.keepPausedSession(
                         MobilePlaybackService.hasCarMediaBrowserClient(),
@@ -877,7 +921,8 @@ public class PlaybackActivity extends LeanbackActivity {
                 // original player and foreground audio must terminate.
                 mMobilePipTransition = false;
                 getWindow().getDecorView().postDelayed(() -> {
-                    if (MobilePipLifecyclePolicy.shouldStopAfterPipExit(
+                    if (!isMobileLockInProgress() && !mMobileScreenLockRetention &&
+                            MobilePipLifecyclePolicy.shouldStopAfterPipExit(
                             mMobilePipSessionActive, mMobileInForeground,
                             mMobileAudioOnly, isInPipMode(), isChangingConfigurations(),
                             mMobileAutoPipHandoffPending)) {
@@ -894,6 +939,10 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override
     public void onUserLeaveHint() {
         if (MobileUi.isHandheld(this)) {
+            if (!isMobileLockInProgress()) {
+                mMobileUserLeaveHintReceived = true;
+                mMobileScreenLockRetention = false;
+            }
             if (isFinishing() || isBackPressed() || mMobilePipTransition ||
                     isInPipMode() || getViewManager().isNewViewPending()
                     || AppDialogPresenter.instance(this).isDialogShown()) return;
