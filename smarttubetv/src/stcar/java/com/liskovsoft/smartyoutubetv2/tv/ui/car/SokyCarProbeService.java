@@ -7,6 +7,7 @@ import androidx.car.app.CarAppService;
 import androidx.car.app.CarContext;
 import androidx.car.app.Screen;
 import androidx.car.app.Session;
+import androidx.car.app.ScreenManager;
 import androidx.car.app.model.Action;
 import androidx.car.app.model.Pane;
 import androidx.car.app.model.PaneTemplate;
@@ -52,12 +53,22 @@ public final class SokyCarProbeService extends CarAppService {
                                         .addText("Car display interface detected.")
                                         .build())
                                 .addRow(new Row.Builder()
-                                        .setTitle("Video not enabled yet")
-                                        .addText("This safe test checks Android Auto support on Android 12.")
+                                        .setTitle("Next: test the drawing surface")
+                                        .addText("Open Surface Test to check native rendering.")
+                                        .build())
+                                .addRow(new Row.Builder()
+                                        .setTitle("Video remains disabled")
+                                        .addText("Surface access is not parked-video permission.")
+                                        .build())
+                                .addAction(new Action.Builder()
+                                        .setTitle("Surface Test")
+                                        .setOnClickListener(() -> getCarContext()
+                                                .getCarService(ScreenManager.class)
+                                                .push(new SokyCarSurfaceProbeScreen(getCarContext())))
                                         .build())
                                 .build();
                         return new PaneTemplate.Builder(pane)
-                                .setTitle("Soky Tube Car - Compatibility Test")
+                                .setTitle("Soky Tube Car - Surface Check")
                                 .setHeaderAction(Action.APP_ICON)
                                 .build();
                     }
