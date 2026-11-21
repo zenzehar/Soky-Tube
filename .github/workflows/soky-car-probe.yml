@@ -6,6 +6,8 @@ on:
       - 'experiment/soky-direct-car-*'
       - 'experiment/soky-car-surface-check-*'
       - 'experiment/soky-car-safety-audit-*'
+      - 'experiment/soky-car-safety-audit-*'
+      - 'experiment/soky-car-passenger-display-*'
   pull_request:
     branches:
       - 'experiment/soky-car-surface-check-*'
@@ -47,13 +49,13 @@ jobs:
       - name: Package APKs and checksums
         run: |
           mkdir -p dist
-          cp smarttubetv/build/outputs/apk/stcar/debug/*_universal.apk dist/SokyTube_Car_Audit_universal.apk
-          cp smarttubetv/build/outputs/apk/stcar/debug/*_arm64-v8a.apk dist/SokyTube_Car_Audit_arm64.apk
+          cp smarttubetv/build/outputs/apk/stcar/debug/*_universal.apk dist/SokyTube_Car_PassengerCheck_universal.apk
+          cp smarttubetv/build/outputs/apk/stcar/debug/*_arm64-v8a.apk dist/SokyTube_Car_PassengerCheck_arm64.apk
           sha256sum dist/*.apk > dist/SHA256SUMS.txt
       - name: Upload test APKs
         uses: actions/upload-artifact@v4
         with:
-          name: SokyTube-Android12-Safety-Audit
+          name: SokyTube-Android12-Passenger-Check
           path: dist/
           retention-days: 14
           if-no-files-found: error
