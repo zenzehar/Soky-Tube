@@ -7,6 +7,15 @@ final class MobilePipServicePolicy {
     /** Home/Recents can deliver onTaskRemoved while PiP is animating. */
     static boolean shouldPauseOnTaskRemoved(boolean explicitBackgroundAudio,
             boolean pipWindowVisibleOrEntering) {
-        return !explicitBackgroundAudio && !pipWindowVisibleOrEntering;
+        return shouldPauseOnTaskRemoved(explicitBackgroundAudio,
+                pipWindowVisibleOrEntering, false);
+    }
+
+    /** Car-driven audio is independent of the phone task and remains active
+     * after Recents removes the UI. The media session owns its teardown. */
+    static boolean shouldPauseOnTaskRemoved(boolean explicitBackgroundAudio,
+            boolean pipWindowVisibleOrEntering, boolean carAudioInUse) {
+        return !explicitBackgroundAudio && !pipWindowVisibleOrEntering &&
+                !carAudioInUse;
     }
 }
