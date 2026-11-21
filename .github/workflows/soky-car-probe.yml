@@ -6,6 +6,9 @@ on:
       - 'experiment/soky-direct-car-*'
       - 'experiment/soky-car-surface-check-*'
       - 'experiment/soky-car-safety-audit-*'
+  pull_request:
+    branches:
+      - 'experiment/soky-car-surface-check-*'
   workflow_dispatch:
 
 permissions:
