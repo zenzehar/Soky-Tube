@@ -385,6 +385,8 @@ public class PlaybackActivity extends LeanbackActivity {
     }
 
     void onMobileVideoChanged(com.liskovsoft.smartyoutubetv2.common.app.models.data.Video video) {
+        if (MobileUi.isHandheld(this) && video != null)
+            MobilePlaybackService.rememberPlayback(this, video, 0);
         if (mMobileWatch != null) mMobileWatch.onVideoChanged(video);
         if (MobileUi.isHandheld(this) && video != null && mPlaybackFragment != null) {
             com.liskovsoft.smartyoutubetv2.tv.ui.main.MainApplication
@@ -579,6 +581,10 @@ public class PlaybackActivity extends LeanbackActivity {
         // The TV Leanback control row remains hidden on handheld devices.
     }
     @Override protected void onStop() {
+        if (MobileUi.isHandheld(this) && mPlaybackFragment != null &&
+                mPlaybackFragment.hasMobilePreparedMedia())
+            MobilePlaybackService.rememberPlayback(this,
+                    mPlaybackFragment.getVideo(), mPlaybackFragment.getPositionMs());
         if (mMobileWatch != null) mMobileWatch.stop();
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
             // PiP dismissal must end playback even if Android reports the
@@ -624,7 +630,11 @@ public class PlaybackActivity extends LeanbackActivity {
             mMobileScreenReceiverRegistered = false;
         }
         if (MobileUi.isHandheld(this) && !isChangingConfigurations() &&
-                !mMobileAudioOnly && mPlaybackFragment != null) {
+                !mMobileAudioOnly && mPlaybackFragment != null &&
+                (isFinishing() || !MobilePlaybackService.hasCarMediaBrowserClient())) {
+            // System reclamation of an Activity while an Android Auto client
+            // remains connected must NOT be interpreted as user-dismissed PiP.
+            // The service will restore audio on an explicit car Play.
             stopClosedMobilePip();
         }
         if (mMobileWatch != null) mMobileWatch.release();
@@ -823,6 +833,11 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override
     protected void onPause() {
         mMobileInForeground = false;
+        if (MobileUi.isHandheld(this) && mPlaybackFragment != null &&
+                mPlaybackFragment.hasMobilePreparedMedia()) {
+            MobilePlaybackService.rememberPlayback(this,
+                    mPlaybackFragment.getVideo(), mPlaybackFragment.getPositionMs());
+        }
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null && !isFinishing() &&
                 mPlaybackFragment.getPlayWhenReady()) {
             // Foreground-service registration must precede screen-off/background
