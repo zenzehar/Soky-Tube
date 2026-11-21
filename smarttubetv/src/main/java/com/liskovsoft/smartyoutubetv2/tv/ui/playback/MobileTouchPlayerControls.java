@@ -657,13 +657,15 @@ final class MobileTouchPlayerControls {
         showSheet("Advanced options", null,
                 new String[]{"Video information", "Loop video",
                         "SponsorBlock settings", "Audio language", "Audio quality",
-                        "Exact resolution", "Playback speed"},
+                        "Exact resolution", "Playback speed",
+                        "Copy playback diagnostics"},
                 new Runnable[]{() -> runAction(R.id.action_info),
                         () -> runAction(R.id.action_repeat),
                         () -> com.liskovsoft.smartyoutubetv2.common.app.presenters.settings
                                 .SponsorBlockSettingsPresenter.instance(activity).show(),
                         this::showAudioLanguage, this::showAudioQuality,
-                        this::showAdvancedQuality, this::showSpeeds});
+                        this::showAdvancedQuality, this::showSpeeds,
+                        activity::copyMobileVideoDiagnostics});
     }
 
     private void showChapters() {
