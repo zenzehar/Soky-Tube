@@ -61,6 +61,7 @@ public class PlaybackActivity extends LeanbackActivity {
     private boolean mMobileScreenOff;
     // Latch playback intent across OEMs that deliver Activity.onStop before SCREEN_OFF.
     private boolean mMobileScreenLockRetention;
+    private boolean mMobileUserLeaveHintReceived;
     private boolean mMobileUnlockSurfacePending;
     private boolean mMobileInForeground;
     private int mMobileWakeRepairAttempts;
@@ -104,6 +105,7 @@ public class PlaybackActivity extends LeanbackActivity {
                 // unlock (or an already-unlocked device) before surface repair.
                 mMobileScreenOff = false;
                 mMobileScreenLockRetention = false;
+                mMobileUserLeaveHintReceived = false;
                 scheduleMobileSurfaceRecovery();
                 updateMobilePipParams();
             }
@@ -296,7 +298,8 @@ public class PlaybackActivity extends LeanbackActivity {
                 "\ncarBrowserConnected: " + MobilePlaybackService.hasCarMediaBrowserClient() +
                 "\nscreenInteractive: " + isMobileScreenInteractive() +
                 "\nkeyguardLocked: " + isMobileKeyguardLocked() +
-                "\nlockRetained: " + mMobileScreenLockRetention;
+                "\nlockRetained: " + mMobileScreenLockRetention +
+                "\nuserLeaveHint: " + mMobileUserLeaveHintReceived;
     }
 
     private void captureMobileVideoDiagnostics(String reason) {
@@ -543,6 +546,7 @@ public class PlaybackActivity extends LeanbackActivity {
             if (isMobileScreenInteractive() && !isMobileKeyguardLocked()) {
                 mMobileScreenOff = false;
                 mMobileScreenLockRetention = false;
+                mMobileUserLeaveHintReceived = false;
             }
         }
         if (MobileUi.isHandheld(this) && !isInPipMode())
@@ -574,7 +578,8 @@ public class PlaybackActivity extends LeanbackActivity {
             // Those conditions previously let the audio service escape.
             // Screen lock must not be classified as dismissing a floating PiP.
             // Keep the active session through onStop even if SCREEN_OFF arrives late.
-            if (MobileScreenLockPolicy.retainOnStop(isMobileLockInProgress(),
+            if (MobileScreenLockPolicy.retainOnStop(
+                    isMobileLockInProgress() || mMobileScreenLockRetention,
                     !isFinishing(), mMobileScreenLockRetention,
                     mPlaybackFragment.getPlayWhenReady())) {
                 mPlaybackFragment.keepMobilePlaybackInBackground(true);
@@ -816,7 +821,11 @@ public class PlaybackActivity extends LeanbackActivity {
             // restrictions. Merely retaining the session NEVER calls play().
             mPlaybackFragment.keepMobilePlaybackInBackground(true);
             MobilePlaybackService.start(this);
-            if (isMobileLockInProgress()) {
+            if (isMobileLockInProgress() || (!mMobileUserLeaveHintReceived &&
+                    !mMobilePipTransition && !mMobileAutoPipHandoffPending &&
+                    !isInPipMode())) {
+                // Some OEMs call onPause/onStop before ACTION_SCREEN_OFF and
+                // before PowerManager reflects the screen-lock transition.
                 mMobileScreenLockRetention = true;
                 captureMobileVideoDiagnostics("onPause-during-lock");
             }
@@ -912,7 +921,7 @@ public class PlaybackActivity extends LeanbackActivity {
                 // original player and foreground audio must terminate.
                 mMobilePipTransition = false;
                 getWindow().getDecorView().postDelayed(() -> {
-                    if (!isMobileLockInProgress() &&
+                    if (!isMobileLockInProgress() && !mMobileScreenLockRetention &&
                             MobilePipLifecyclePolicy.shouldStopAfterPipExit(
                             mMobilePipSessionActive, mMobileInForeground,
                             mMobileAudioOnly, isInPipMode(), isChangingConfigurations(),
@@ -930,6 +939,10 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override
     public void onUserLeaveHint() {
         if (MobileUi.isHandheld(this)) {
+            if (!isMobileLockInProgress()) {
+                mMobileUserLeaveHintReceived = true;
+                mMobileScreenLockRetention = false;
+            }
             if (isFinishing() || isBackPressed() || mMobilePipTransition ||
                     isInPipMode() || getViewManager().isNewViewPending()
                     || AppDialogPresenter.instance(this).isDialogShown()) return;
