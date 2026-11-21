@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Experimental template probe: host must provide a surface before video work begins. -->
+    <uses-permission android:name="androidx.car.app.ACCESS_SURFACE" />
+    <uses-permission android:name="androidx.car.app.NAVIGATION_TEMPLATES" />
+
+    <application
+        android:allowBackup="false"
+        android:label="@string/car_app_name"
+        tools:replace="android:allowBackup,android:label">
+
+        <!-- Deliberately distinct from the mobile media app descriptor. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/soky_car_probe_app_desc"
+            tools:replace="android:resource" />
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="1" />
+
+        <!-- Car-test package does not register a MediaBrowserService with Android
+             Auto: it would take over the UI and make this an audio-only player.
+             The original mobile flavor retains the full existing audio service. -->
+        <service
+            android:name="com.liskovsoft.smartyoutubetv2.tv.ui.playback.MobilePlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback"
+            tools:node="replace" />
+
+        <service
+            android:name="com.liskovsoft.smartyoutubetv2.tv.ui.car.SokyCarProbeService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.car.app.CarAppService" />
+                <category android:name="androidx.car.app.category.NAVIGATION" />
+            </intent-filter>
+        </service>
+
+        <!-- A separate static diagnostic Activity; do not expose playback UI
+             under CAR_LAUNCHER until a real parked-state guarantee is tested. -->
+        <activity
+            android:name="com.liskovsoft.smartyoutubetv2.tv.ui.car.SokyCarProbeActivity"
+            android:exported="true"
+            android:resizeableActivity="true"
+            android:label="@string/car_app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.CAR_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Reuse phone-safe single-task lifecycle if a phone screen is opened. -->
+        <activity
+            android:name="com.liskovsoft.smartyoutubetv2.tv.ui.playback.PlaybackActivity"
+            android:launchMode="singleTask"
+            android:showWhenLocked="false"
+            android:turnScreenOn="false"
+            tools:replace="android:launchMode,android:showWhenLocked" />
+    </application>
+</manifest>
