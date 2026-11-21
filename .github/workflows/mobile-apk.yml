@@ -18,6 +18,7 @@ on:
       - 'fix/mobile-v7-11-*'
       - 'fix/mobile-v7-12-*'
       - 'fix/mobile-v7-13-*'
+      - 'fix/mobile-v7-14-*'
   workflow_dispatch:
 
 concurrency:
@@ -80,6 +81,9 @@ jobs:
       - name: Test paused Android Auto media-session retention
         run: |
           ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileCarPlaybackPolicyTest"
+      - name: Test Android 12+ media button PendingIntent mutability
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileMediaButtonIntentPolicyTest"
       - name: Build installable debug-signed mobile APK
         run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
@@ -100,8 +104,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-13-window-car-resume-20261121 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.13 - Window Compositor Stability and Paused Android Auto Resume (21 Nov 2026)" \
-            --notes "v7.13 targets frozen/black video after portrait/fullscreen and native PiP transitions: immediately clear stale GPU transforms on system PiP expansion, orientation changes and focus regain (preserving finger-following minimization and aborted-drag animation); apply phone immersive/status-bar changes only when changing window modes instead of every player frame layout; confirm fresh texture frames after BOTH orientation and native PiP expansion. Android Auto long pause: recognise car media-browser clients and keep the same ExoPlayer/MediaSessionCompat attached while paused and locked, without letting closed PiP continue audio. Adds car session unit tests and privacy-safe Copy playback diagnostics in Advanced options. All prior features preserved; TV mainline unchanged. Physical device/car tests still required. Extremely long pauses with system process death may require future service-owned player migration." \
+          gh release create mobile-preview-v7-14-android12-media-session-20261121 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.14 - Android 12+ Media Session Crash Fix (21 Nov 2026)" \
+            --notes "Fix crash on Android 12+ on playback screen: MediaSessionCompat in the v7.13 phone APK created a media-button PendingIntent without FLAG_IMMUTABLE or FLAG_MUTABLE. v7.14 explicitly creates an immutable, receiver-targeted media-button PendingIntent and passes it to the shared MediaSessionCompat. AndroidX Media is upgraded from 1.2.0 to patched 1.4.3 for the mobile flavor only. Includes API 17-36 flag regression tests. Preserves v7.13 fullscreen/PiP compositor fixes, Android Auto paused lock-screen retention, player, notifications and background-audio policy. TV flavors are unchanged. Physical Android 12+ and car/PiP tests are still required." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-13-window-car-resume-20261121 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-14-android12-media-session-20261121 dist/*.apk dist/SHA256SUMS.txt --clobber
