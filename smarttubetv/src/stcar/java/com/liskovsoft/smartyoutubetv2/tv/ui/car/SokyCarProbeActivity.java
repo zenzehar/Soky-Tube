@@ -26,7 +26,8 @@ public final class SokyCarProbeActivity extends Activity {
         notice.setPadding(padding, padding, padding, padding);
         notice.setText("Soky Tube Car - Compatibility Test\n\n" +
                 "The car has opened Soky Tube's own display.\n\n" +
-                "Video is disabled until parked-mode verification is available.");
+                SokyCarPlaybackGate.diagnosticState() + "\\n" +
+                SokyCarPlaybackGate.blockReason());
         setContentView(notice);
     }
 }
