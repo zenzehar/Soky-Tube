@@ -28,13 +28,10 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.bumptech.glide.Glide;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
-import com.liskovsoft.smartyoutubetv2.common.app.models.playback.service.VideoStateService;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -65,13 +62,6 @@ public final class MobileVideoFeed {
     private final boolean showChips;
     private String filter = "All";
     private boolean refreshQueued;
-    // This is only enabled for the separate phone News section; Home is unchanged.
-    private boolean personalizedNews;
-    private long newsShuffleSeed = System.nanoTime();
-    private final Set<String> previouslyShownNews = new HashSet<>();
-    private final ArrayList<FeedItem> newsProvider = new ArrayList<>();
-    private final ArrayList<FeedItem> newsSubscriptions = new ArrayList<>();
-    private final ArrayList<FeedItem> newsRecommended = new ArrayList<>();
 
     private static final class FeedItem {
         Video video;
@@ -177,71 +167,6 @@ public final class MobileVideoFeed {
         applyFilter();
     }
 
-    public void enablePersonalizedNews() {
-        personalizedNews = true;
-    }
-
-    /** Rotate even if the provider repeats its last snapshot. */
-    public void shufflePersonalizedNews() {
-        if (!personalizedNews) return;
-        previouslyShownNews.clear();
-        for (int i = 0; i < Math.min(18, adapter.displayed.size()); i++) {
-            String id = adapter.displayed.get(i).video.videoId;
-            if (!TextUtils.isEmpty(id)) previouslyShownNews.add(id);
-        }
-        newsShuffleSeed = System.nanoTime() ^ (newsShuffleSeed * 31 + 1);
-        rebuildPersonalizedNews();
-        list.scrollToPosition(0);
-    }
-
-    /** Independent News source pools; nothing modifies the Home adapter. */
-    public void setPersonalizedNewsCandidates(List<Video> videos, boolean subscribed) {
-        if (!personalizedNews) return;
-        ArrayList<FeedItem> destination = subscribed ? newsSubscriptions : newsRecommended;
-        destination.clear();
-        if (videos != null) for (Video video : videos) {
-            if (video != null && !TextUtils.isEmpty(video.videoId) &&
-                    !video.isChapter && !video.isShorts && !video.isUpcoming)
-                destination.add(new FeedItem(video, subscribed ? "Subscriptions" : "For you"));
-        }
-        rebuildPersonalizedNews();
-    }
-
-    private static List<MobileNewsMixer.Item<FeedItem>> newsItems(
-            List<FeedItem> source, int origin) {
-        ArrayList<MobileNewsMixer.Item<FeedItem>> result = new ArrayList<>();
-        for (FeedItem item : source) {
-            Video video = item.video;
-            if (video != null && !TextUtils.isEmpty(video.videoId))
-                result.add(new MobileNewsMixer.Item<>(video.videoId, video.getTitle(),
-                        video.getAuthor(), video.channelId, origin,
-                        video.isSubscribed, item));
-        }
-        return result;
-    }
-
-    private void rebuildPersonalizedNews() {
-        if (!personalizedNews) return;
-        List<MobileNewsMixer.Item<FeedItem>> watched = new ArrayList<>();
-        VideoStateService history = VideoStateService.instance(context);
-        if (history != null) {
-            for (VideoStateService.State state : new ArrayList<>(history.getStates())) {
-                Video v = state.video;
-                if (v != null && !v.incognito && !TextUtils.isEmpty(v.videoId))
-                    watched.add(new MobileNewsMixer.Item<>(v.videoId, v.getTitle(),
-                            v.getAuthor(), v.channelId, MobileNewsMixer.NEWS, false, null));
-            }
-        }
-        List<MobileNewsMixer.Item<FeedItem>> mixed = MobileNewsMixer.mix(
-                newsItems(newsProvider, MobileNewsMixer.NEWS),
-                newsItems(newsSubscriptions, MobileNewsMixer.SUBSCRIPTIONS),
-                newsItems(newsRecommended, MobileNewsMixer.RECOMMENDATIONS),
-                watched, previouslyShownNews, newsShuffleSeed, 60);
-        ArrayList<FeedItem> display = new ArrayList<>();
-        for (MobileNewsMixer.Item<FeedItem> item : mixed) display.add(item.value);
-        setItems(display);
-    }
-
     public void setBottomInsetDp(int bottomDp) {
         list.setPadding(0, 0, 0, dp(bottomDp));
     }
@@ -275,13 +200,7 @@ public final class MobileVideoFeed {
                 }
             }
         }
-        if (personalizedNews) {
-            newsProvider.clear();
-            newsProvider.addAll(next);
-            rebuildPersonalizedNews();
-        } else {
-            setItems(next);
-        }
+        setItems(next);
     }
 
     public void setVideos(ObjectAdapter videos, String category) {
