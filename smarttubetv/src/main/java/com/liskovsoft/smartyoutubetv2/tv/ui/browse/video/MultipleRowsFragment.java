@@ -148,7 +148,7 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         if (mNewsRecommendationsAction != null) mNewsRecommendationsAction.dispose();
         mNewsSubscriptionsAction = null;
         mNewsRecommendationsAction = null;
-        mMobileNews = false;
+        // Keep section identity across fragment view recreation/rotation.
         mMobileFeed = null;
         super.onDestroyView();
     }
