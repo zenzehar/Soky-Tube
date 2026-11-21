@@ -48,6 +48,26 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     private static MediaSessionCompat sharedSession;
     private static MobilePlaybackService activeService;
     private static volatile boolean explicitAudioOnly;
+    private static volatile boolean carMediaBrowserConnected;
+
+    /**
+     * A media browser from Android Auto may remain connected while the car
+     * pauses playback and the phone is locked. Keep the *existing* decoder
+     * and MediaSessionConnector attached across Activity.onStop even if
+     * ExoPlayer.playWhenReady is false.
+     */
+    static boolean hasCarMediaBrowserClient() {
+        return carMediaBrowserConnected && activeService != null;
+    }
+
+    private static boolean isCarMediaBrowserClient(String packageName) {
+        if (packageName == null) return false;
+        String normalized = packageName.toLowerCase(java.util.Locale.ROOT);
+        return normalized.equals("com.google.android.projection.gearhead") ||
+                normalized.contains("carassistant") ||
+                normalized.startsWith("com.android.car.") ||
+                normalized.contains("automotive");
+    }
     private static final String AUTO_ROOT = "soky_audio_root";
     private static final String AUTO_HELP = "soky_audio_phone_help";
     private static final String AUTO_NOW = "now_playing_audio";
@@ -137,6 +157,10 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     @Nullable @Override public BrowserRoot onGetRoot(@NonNull String clientPackageName,
             int clientUid, @Nullable Bundle rootHints) {
         // A driver-safe audio-only media root, with no browsing video thumbnails.
+        // Detect the connected car client; it must be able to resume a
+        // previously paused ExoPlayer without first waking/unlocking phone UI.
+        if (isCarMediaBrowserClient(clientPackageName))
+            carMediaBrowserConnected = true;
         return new BrowserRoot(AUTO_ROOT, null);
     }
 
@@ -292,6 +316,7 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
 
     @Override public void onDestroy() {
         foreground = false;
+        carMediaBrowserConnected = false;
         activeService = null;
         // Do not release the media session here: Android may stop a service
         // while the fragment's player is still alive. Session ownership and
