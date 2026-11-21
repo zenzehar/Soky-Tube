@@ -8,6 +8,8 @@ import android.content.Intent;
 import android.content.Context;
 import android.content.IntentFilter;
 import android.content.BroadcastReceiver;
+import android.content.ClipboardManager;
+import android.content.ClipData;
 import android.app.KeyguardManager;
 import android.os.PowerManager;
 import android.view.WindowManager;
@@ -75,7 +77,17 @@ public class PlaybackActivity extends LeanbackActivity {
                 mMobileUnlockSurfacePending = true;
                 mMobileWakeRepairAttempts = 0;
                 mOpenBrowseAfterPip = false;
-                if (mPlaybackFragment != null && mPlaybackFragment.getPlayWhenReady()) {
+                if (mPlaybackFragment != null &&
+                        (mPlaybackFragment.getPlayWhenReady() ||
+                         MobileCarPlaybackPolicy.keepPausedSession(
+                                 MobilePlaybackService.hasCarMediaBrowserClient(),
+                                 mMobileAudioOnly,
+                                 mPlaybackFragment.hasMobilePreparedMedia(),
+                                 isFinishing(), false))) {
+                    // A paused car session must remain bound to ExoPlayer
+                    // across screen-off. Previously only a PLAYING video set
+                    // this flag, so Fragment.onStop released paused audio
+                    // and Android Auto needed a phone unlock to resume.
                     mPlaybackFragment.keepMobilePlaybackInBackground(true);
                     MobilePlaybackService.start(PlaybackActivity.this);
                 }
@@ -122,10 +134,22 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus && MobileUi.isHandheld(this) && !isInPipMode()) {
-            if (getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE)
-                MobileSystemBars.ensure(this, false);
+            updateMobilePlayerWindowMode(
+                    getResources().getConfiguration().orientation ==
+                            Configuration.ORIENTATION_LANDSCAPE);
+            if (mMobileWatch != null) mMobileWatch.onPlayerWindowFocusRestored();
             scheduleMobileSurfaceRecovery();
+            if (mMobileRotationRecoveryPending)
+                scheduleMobileRotationVideoRecovery(0);
         }
+    }
+
+    /** Called from watch layout, but system window flags change only once per
+     * mode via MobileSystemBars. Video-frame resizing must never reapply them.
+     */
+    void updateMobilePlayerWindowMode(boolean landscape) {
+        if (MobileUi.isHandheld(this) && !isInPipMode())
+            MobileSystemBars.setVideoFullscreen(this, landscape);
     }
 
     /** Explicit touch control independent of the accelerometer setting. */
@@ -138,14 +162,11 @@ public class PlaybackActivity extends LeanbackActivity {
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null) {
-            if (newConfig.orientation != Configuration.ORIENTATION_LANDSCAPE && !isInPipMode())
-                MobileSystemBars.ensure(this, false);
-            mMobileRotationRecoveryPending = !isInPipMode();
-            mMobileRotationFrameMeasured = false;
-            mMobileRotationMeasuredAtMs = android.os.SystemClock.uptimeMillis();
-            mMobileRotationSurfaceBound = false;
-            mMobileRotationGeneration++;
-            if (mMobileWatch != null) mMobileWatch.applyLayout();
+            updateMobilePlayerWindowMode(
+                    newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE);
+            beginMobileVisualTransitionRecovery();
+            if (mMobileWatch != null)
+                mMobileWatch.onFullscreenConfigurationChanged();
             // Rebind only AFTER the responsive 16:9 container has measured
             // its new dimensions, otherwise controls use the old orientation.
             getWindow().getDecorView().post(() -> {
@@ -158,6 +179,20 @@ public class PlaybackActivity extends LeanbackActivity {
             // ExoPlayer continues outputting audio.
             scheduleMobileRotationVideoRecovery(0);
         }
+    }
+
+    /**
+     * Enter a compositor recovery epoch for either screen orientation OR
+     * system PiP expansion. Both can invalidate the displayed texture even
+     * though the decoder keeps playing audio. The existing recovery loop
+     * waits for a freshly composited frame after layout changes.
+     */
+    private void beginMobileVisualTransitionRecovery() {
+        mMobileRotationRecoveryPending = !isInPipMode();
+        mMobileRotationFrameMeasured = false;
+        mMobileRotationMeasuredAtMs = android.os.SystemClock.uptimeMillis();
+        mMobileRotationSurfaceBound = false;
+        mMobileRotationGeneration++;
     }
 
     /** A configuration event precedes the actual fullscreen frame resize.
@@ -180,6 +215,7 @@ public class PlaybackActivity extends LeanbackActivity {
         if (attempt > MobileRotationSurfacePolicy.MAX_ATTEMPTS) {
             mMobileRotationRecoveryPending = false;
             Log.w(TAG, "Mobile fullscreen output unavailable after layout retries");
+            captureMobileVideoDiagnostics("no-new-frame-after-retries");
             return;
         }
         final int generation = mMobileRotationGeneration;
@@ -202,6 +238,7 @@ public class PlaybackActivity extends LeanbackActivity {
                 // the NEW fullscreen texture, not merely a still-valid old
                 // surface. Stop retries as soon as the first frame arrives.
                 mMobileRotationRecoveryPending = false;
+                captureMobileVideoDiagnostics("fresh-texture-frame-confirmed");
                 return;
             }
             if (MobileRotationSurfacePolicy.shouldRebind(attempt)) {
@@ -217,6 +254,59 @@ public class PlaybackActivity extends LeanbackActivity {
             // avoid repeatedly interrupting a slow hardware decoder.
             scheduleMobileRotationVideoRecovery(attempt + 1);
         }, attempt == 0 ? 100L : 170L);
+    }
+
+    /** A user-triggered, privacy-safe report. Captures only player/window
+     * geometry and recent texture-frame age, never Google account,
+     * video title, URL, history or access tokens.
+     */
+    private String mobileVideoDiagnosticsSnapshot(String reason) {
+        View frame = findViewById(R.id.mobile_player_frame);
+        View decor = getWindow().getDecorView();
+        long lastFrameMs = mPlaybackFragment != null
+                ? mPlaybackFragment.lastMobileVideoFrameUptimeMs() : 0L;
+        long nowMs = android.os.SystemClock.uptimeMillis();
+        return "Soky Tube mobile v7.13 playback diagnostics" +
+                "\nreason: " + reason +
+                "\nscreenOrientation: " + getResources().getConfiguration().orientation +
+                "\npiP: " + isInPipMode() +
+                "\nwindowFocus: " + decor.hasWindowFocus() +
+                "\nplayerReady: " + (mPlaybackFragment != null &&
+                        mPlaybackFragment.isEngineInitialized()) +
+                "\nplayWhenReady: " + (mPlaybackFragment != null &&
+                        mPlaybackFragment.getPlayWhenReady()) +
+                "\nframeMeasured: " + mMobileRotationFrameMeasured +
+                "\nframeSize: " + (frame == null ? "missing" :
+                        frame.getWidth() + "x" + frame.getHeight()) +
+                "\nframeScale: " + (frame == null ? "n/a" :
+                        frame.getScaleX() + "," + frame.getScaleY()) +
+                "\nframeTranslation: " + (frame == null ? "n/a" :
+                        frame.getTranslationX() + "," + frame.getTranslationY()) +
+                "\nlastCompositedFrameAgoMs: " + (lastFrameMs > 0 ?
+                        nowMs - lastFrameMs : -1) +
+                "\nrotationPending: " + mMobileRotationRecoveryPending +
+                "\ncarBrowserConnected: " + MobilePlaybackService.hasCarMediaBrowserClient();
+    }
+
+    private void captureMobileVideoDiagnostics(String reason) {
+        if (!MobileUi.isHandheld(this)) return;
+        getSharedPreferences("soky_video_diagnostics", MODE_PRIVATE).edit()
+                .putString("last", mobileVideoDiagnosticsSnapshot(reason))
+                .apply();
+    }
+
+    void copyMobileVideoDiagnostics() {
+        String previous = getSharedPreferences("soky_video_diagnostics", MODE_PRIVATE)
+                .getString("last", "No completed fullscreen transition recorded.");
+        String report = previous + "\n\n" +
+                mobileVideoDiagnosticsSnapshot("user-requested-current-state");
+        ClipboardManager manager = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (manager != null) {
+            manager.setPrimaryClip(ClipData.newPlainText(
+                    "Soky Tube playback diagnostics", report));
+            android.widget.Toast.makeText(this,
+                    "Playback diagnostics copied", android.widget.Toast.LENGTH_SHORT).show();
+        }
     }
 
     private boolean isMobileScreenInteractive() {
@@ -437,9 +527,10 @@ public class PlaybackActivity extends LeanbackActivity {
             if (isMobileScreenInteractive() && !isMobileKeyguardLocked())
                 mMobileScreenOff = false;
         }
-        if (MobileUi.isHandheld(this) && !isInPipMode() &&
-                getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE)
-            MobileSystemBars.ensure(this, false);
+        if (MobileUi.isHandheld(this) && !isInPipMode())
+            updateMobilePlayerWindowMode(
+                    getResources().getConfiguration().orientation ==
+                            Configuration.ORIENTATION_LANDSCAPE);
         if (mMobileWatch != null) mMobileWatch.resume();
         if (MobileUi.isHandheld(this)) {
             mMobileAudioOnly = false;
@@ -466,6 +557,16 @@ public class PlaybackActivity extends LeanbackActivity {
                     mMobilePipSessionActive, mMobileAudioOnly,
                     mMobilePipTransition, isChangingConfigurations(), isFinishing())) {
                 stopClosedMobilePip();
+            } else if (MobileCarPlaybackPolicy.keepPausedSession(
+                    MobilePlaybackService.hasCarMediaBrowserClient(),
+                    mMobileAudioOnly,
+                    mPlaybackFragment.hasMobilePreparedMedia(),
+                    isFinishing(),
+                    mMobilePipSessionActive && !isInPipMode())) {
+                // onStop happens BEFORE Fragment.onStop; retain its decoder
+                // and the MediaSessionConnector even while playWhenReady=false.
+                mPlaybackFragment.keepMobilePlaybackInBackground(true);
+                MobilePlaybackService.start(this);
             } else if (mPlaybackFragment.getPlayWhenReady()) {
                 mPlaybackFragment.keepMobilePlaybackInBackground(true);
             }
@@ -680,6 +781,18 @@ public class PlaybackActivity extends LeanbackActivity {
     @Override
     protected void onPause() {
         mMobileInForeground = false;
+        if (MobileUi.isHandheld(this) && mPlaybackFragment != null &&
+                MobileCarPlaybackPolicy.keepPausedSession(
+                        MobilePlaybackService.hasCarMediaBrowserClient(),
+                        mMobileAudioOnly, mPlaybackFragment.hasMobilePreparedMedia(),
+                        isFinishing(),
+                        mMobilePipSessionActive && !isInPipMode())) {
+            // Start/retain the media playback service while this Activity is
+            // still transitioning to the background, BEFORE a locked device
+            // restricts new foreground-service launches.
+            mPlaybackFragment.keepMobilePlaybackInBackground(true);
+            MobilePlaybackService.start(this);
+        }
         boolean hasDialogBug = AppDialogPresenter.instance(this).isDialogShown() && Build.VERSION.SDK_INT <= 23;
         boolean isScreenOff = getPlayerData().getBackgroundMode() != PlayerData.BACKGROUND_MODE_DEFAULT && Utils.isHardScreenOff(this);
 
@@ -727,6 +840,14 @@ public class PlaybackActivity extends LeanbackActivity {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode);
 
         mPlaybackFragment.onPIPChanged(isInPictureInPictureMode);
+        if (MobileUi.isHandheld(this) && !isInPictureInPictureMode &&
+                mMobilePipSessionActive) {
+            // Native PiP expanded: the operating system has already done
+            // the window animation. Reset the touch transform immediately
+            // and verify the FIRST new composited video frame. There may be
+            // no orientation change, so onConfigurationChanged isn't called.
+            beginMobileVisualTransitionRecovery();
+        }
         if (mMobileWatch != null) {
             mMobileWatch.setPipMode(isInPictureInPictureMode);
             mMobileWatch.setControlsShown(!isInPictureInPictureMode);

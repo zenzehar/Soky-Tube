@@ -19,6 +19,55 @@ import android.widget.FrameLayout;
 public final class MobileSystemBars {
     private MobileSystemBars() {}
 
+    // An Activity's fullscreen window state is owned here, separately from
+    // its frequently called video-frame sizing logic. Weak keys allow normal
+    // GC after a playback Activity is destroyed.
+    private static final java.util.WeakHashMap<Activity, Boolean> VIDEO_FULLSCREEN =
+            new java.util.WeakHashMap<>();
+
+    /** Apply immersive video mode exactly ONCE when orientation changes.
+     * Do not set FLAG_FULLSCREEN on every video layout measurement: that
+     * also forces a new window-size transaction and can stall the texture
+     * compositor until touch/task switcher brings the window into focus.
+     */
+    public static void setVideoFullscreen(Activity activity, boolean fullscreen) {
+        if (!MobileUi.isHandheld(activity)) return;
+        synchronized (VIDEO_FULLSCREEN) {
+            Boolean old = VIDEO_FULLSCREEN.get(activity);
+            if (old != null && old == fullscreen) return;
+            VIDEO_FULLSCREEN.put(activity, fullscreen);
+        }
+        if (!fullscreen) {
+            ensure(activity, false);
+        } else {
+            Window window = activity.getWindow();
+            // Android 11+ controls the system bars without the disruptive
+            // legacy FLAG_FULLSCREEN window reconfiguration.
+            window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            View decor = window.getDecorView();
+            if (Build.VERSION.SDK_INT >= 30) {
+                window.setDecorFitsSystemWindows(false);
+                WindowInsetsController controller = window.getInsetsController();
+                if (controller != null) {
+                    controller.setSystemBarsBehavior(
+                            WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                    controller.hide(WindowInsets.Type.statusBars() |
+                            WindowInsets.Type.navigationBars());
+                }
+            } else {
+                decor.setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_FULLSCREEN |
+                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
+                        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+                        View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
+                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+            }
+        }
+        View content = activity.findViewById(android.R.id.content);
+        if (content != null) content.requestApplyInsets();
+    }
+
     public static void install(Activity activity, boolean lightStatusIcons) {
         if (!MobileUi.isHandheld(activity)) return;
         ensure(activity, lightStatusIcons);
@@ -91,6 +140,20 @@ public final class MobileSystemBars {
 
     private static void applyPadding(Activity activity, View content, WindowInsets insets,
             int originalLeft, int originalTop, int originalRight, int originalBottom) {
+        synchronized (VIDEO_FULLSCREEN) {
+            if (Boolean.TRUE.equals(VIDEO_FULLSCREEN.get(activity))) {
+                // The video may occupy the physical screen in landscape.
+                // Retaining portrait status/nav padding after hiding the bars
+                // makes the transformed video rectangle inconsistent with
+                // the actual surface size.
+                if (content.getPaddingLeft() != originalLeft ||
+                        content.getPaddingTop() != originalTop ||
+                        content.getPaddingRight() != originalRight ||
+                        content.getPaddingBottom() != originalBottom)
+                    content.setPadding(originalLeft, originalTop, originalRight, originalBottom);
+                return;
+            }
+        }
         if (insets == null || content.getHeight() <= 0) return;
         int safeTop, safeBottom;
         if (Build.VERSION.SDK_INT >= 30) {

@@ -469,6 +469,31 @@ final class MobileTouchPlayerControls {
         videoContainer.setPivotY(videoContainer.getHeight() / 2f);
     }
 
+    /**
+     * Native PiP expansion and orientation switches must NEVER run an
+     * extra ViewPropertyAnimator on the whole video/TextureView hierarchy.
+     * A pending GPU transform can retain an old buffer; Android's task
+     * switcher or a user touch then forces the apparent "unfreeze".
+     *
+     * Keep the existing gesture morph on entry and the bounce-back animation
+     * for an aborted finger drag; only settled window transitions snap.
+     */
+    void clearTransitionTransformImmediately() {
+        draggingToPip = false;
+        videoContainer.animate().cancel();
+        videoContainer.clearAnimation();
+        videoContainer.setTranslationX(0f);
+        videoContainer.setTranslationY(0f);
+        videoContainer.setScaleX(1f);
+        videoContainer.setScaleY(1f);
+        videoContainer.setElevation(0f);
+        videoContainer.setPivotX(videoContainer.getWidth() / 2f);
+        videoContainer.setPivotY(videoContainer.getHeight() / 2f);
+        videoContainer.setLayerType(View.LAYER_TYPE_NONE, null);
+        videoContainer.requestLayout();
+        videoContainer.invalidate();
+    }
+
     void resetPipTransform() {
         videoContainer.animate().cancel();
         videoContainer.animate().translationX(0f).translationY(0f)
@@ -632,13 +657,15 @@ final class MobileTouchPlayerControls {
         showSheet("Advanced options", null,
                 new String[]{"Video information", "Loop video",
                         "SponsorBlock settings", "Audio language", "Audio quality",
-                        "Exact resolution", "Playback speed"},
+                        "Exact resolution", "Playback speed",
+                        "Copy playback diagnostics"},
                 new Runnable[]{() -> runAction(R.id.action_info),
                         () -> runAction(R.id.action_repeat),
                         () -> com.liskovsoft.smartyoutubetv2.common.app.presenters.settings
                                 .SponsorBlockSettingsPresenter.instance(activity).show(),
                         this::showAudioLanguage, this::showAudioQuality,
-                        this::showAdvancedQuality, this::showSpeeds});
+                        this::showAdvancedQuality, this::showSpeeds,
+                        activity::copyMobileVideoDiagnostics});
     }
 
     private void showChapters() {

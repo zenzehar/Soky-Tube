@@ -17,6 +17,7 @@ on:
       - 'fix/mobile-v7-10-*'
       - 'fix/mobile-v7-11-*'
       - 'fix/mobile-v7-12-*'
+      - 'fix/mobile-v7-13-*'
   workflow_dispatch:
 
 concurrency:
@@ -76,6 +77,9 @@ jobs:
       - name: Test first fullscreen measured-surface recovery
         run: |
           ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileRotationSurfacePolicyTest"
+      - name: Test paused Android Auto media-session retention
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileCarPlaybackPolicyTest"
       - name: Build installable debug-signed mobile APK
         run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
@@ -96,8 +100,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-12-first-fullscreen-surface-20261121 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.12 - First Fullscreen Video Surface Fix (21 Nov 2026)" \
-            --notes "v7.12 targeted fix: phone fullscreen first-transition black screen with audio. Root cause hypothesis: v7.11 surface recovery wrongly accepted an old valid but not freshly measured video surface, directly bypassed the Leanback callback, and on TextureView could replace its SurfaceTextureListener. Mobile now uses a stable texture-backed video output for view resizing and PiP animations (TV settings and TV playback unchanged), one retained Surface per SurfaceTexture lifecycle, the original SurfaceHolderGlueHost callback for rebind, and a measured video-frame layout callback plus bounded retries before restoring. Adds MobileRotationSurfacePolicyTest. Preserves all previous v7.11 improvements. OEM phone validation still required; video performance and decoder hardware differences may vary." \
+          gh release create mobile-preview-v7-13-window-car-resume-20261121 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.13 - Window Compositor Stability and Paused Android Auto Resume (21 Nov 2026)" \
+            --notes "v7.13 targets frozen/black video after portrait/fullscreen and native PiP transitions: immediately clear stale GPU transforms on system PiP expansion, orientation changes and focus regain (preserving finger-following minimization and aborted-drag animation); apply phone immersive/status-bar changes only when changing window modes instead of every player frame layout; confirm fresh texture frames after BOTH orientation and native PiP expansion. Android Auto long pause: recognise car media-browser clients and keep the same ExoPlayer/MediaSessionCompat attached while paused and locked, without letting closed PiP continue audio. Adds car session unit tests and privacy-safe Copy playback diagnostics in Advanced options. All prior features preserved; TV mainline unchanged. Physical device/car tests still required. Extremely long pauses with system process death may require future service-owned player migration." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-12-first-fullscreen-surface-20261121 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-13-window-car-resume-20261121 dist/*.apk dist/SHA256SUMS.txt --clobber

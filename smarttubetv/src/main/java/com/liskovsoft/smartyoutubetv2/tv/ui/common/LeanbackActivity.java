@@ -73,7 +73,13 @@ public abstract class LeanbackActivity extends MotherActivity {
 
         mGlobalKeyTranslator.apply(); // adapt to state changes (like enter/exit from PIP mode)
 
-        mModeSyncManager.restore(this);
+        // TV automatic frame-rate/display-mode restoration schedules an
+        // additional window display-mode change ONE SECOND after onResume.
+        // On phones returning from fullscreen/PiP, that races the native
+        // TextureView compositor and can keep the frame black/frozen until
+        // another focus transaction (touch or Android Recents). Phone video
+        // follows Android's own display scheduling instead.
+        if (!MobileUi.isHandheld(this)) mModeSyncManager.restore(this);
 
         getViewManager().addTop(this);
     }

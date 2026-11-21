@@ -153,6 +153,16 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     }
 
     private boolean mKeepMobilePlaybackInBackground;
+    // ExoPlayerController stores Video via WeakReference. A long pause while
+    // the phone is locked can collect the metadata even though the decoder
+    // still has a prepared media source, leaving Android Auto with no title
+    // and the Activity lifecycle unable to recognize the retained session.
+    private Video mMobileCurrentVideo;
+
+    boolean hasMobilePreparedMedia() {
+        return mExoPlayerController != null &&
+                mExoPlayerController.containsMedia();
+    }
 
     void keepMobilePlaybackInBackground(boolean enabled) {
         if (MobileUi.isHandheld(getContext())) {
@@ -1053,6 +1063,7 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
     @Override
     public void setVideo(Video video) {
         if (MobileUi.isHandheld(getContext())) {
+            mMobileCurrentVideo = video;
             mMobileChapters = java.util.Collections.emptyList();
             if (getActivity() instanceof PlaybackActivity)
                 ((PlaybackActivity) getActivity()).onMobileChaptersChanged(mMobileChapters);
@@ -1393,6 +1404,7 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
 
     @Override
     public void onDestroy() {
+        mMobileCurrentVideo = null;
         super.onDestroy();
 
         Log.d(TAG, "Destroying PlaybackFragment...");
@@ -1412,7 +1424,11 @@ public class PlaybackFragment extends SeekModePlaybackFragment implements Playba
             return null;
         }
 
-        return mExoPlayerController.getVideo();
+        Video selected = mExoPlayerController.getVideo();
+        // The mobile player owns the current video's metadata while an
+        // Android Auto/notification controller may still request it after
+        // a long background pause. Never depend on a cleared weak reference.
+        return selected != null ? selected : mMobileCurrentVideo;
     }
 
     @Override
