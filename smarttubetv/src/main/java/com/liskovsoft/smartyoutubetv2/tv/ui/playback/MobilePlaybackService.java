@@ -250,9 +250,11 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     }
 
     private void resumeCarAudio() {
-        if (fragmentSessionOwner || sharedSession == null) return;
+        if (sharedSession == null) return;
         MobileCarResumeState resume = MobileCarResumeState.get(this);
-        if (resume == null) {
+        if (!MobileCarResumePolicy.mayColdResume(
+                true, fragmentSessionOwner, resume != null)) {
+            if (fragmentSessionOwner) return;
             sharedSession.setPlaybackState(new PlaybackStateCompat.Builder()
                     .setState(PlaybackStateCompat.STATE_ERROR, 0, 0)
                     .setErrorMessage("Start a video on your phone once to enable car resume")
