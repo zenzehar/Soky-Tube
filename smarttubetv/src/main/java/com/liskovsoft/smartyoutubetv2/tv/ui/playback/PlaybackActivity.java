@@ -98,6 +98,7 @@ public class PlaybackActivity extends LeanbackActivity {
                     MobilePlaybackService.start(PlaybackActivity.this);
                 }
                 updateMobilePipParams(); // setAutoEnterEnabled(false)
+                captureMobileVideoDiagnostics("screen-off-received");
             } else if (Intent.ACTION_USER_PRESENT.equals(action)) {
                 // Screen on is NOT sufficient: wait for the real keyguard
                 // unlock (or an already-unlocked device) before surface repair.
@@ -273,7 +274,7 @@ public class PlaybackActivity extends LeanbackActivity {
         long lastFrameMs = mPlaybackFragment != null
                 ? mPlaybackFragment.lastMobileVideoFrameUptimeMs() : 0L;
         long nowMs = android.os.SystemClock.uptimeMillis();
-        return "Soky Tube mobile v7.13 playback diagnostics" +
+        return "Soky Tube mobile v7.16 playback diagnostics" +
                 "\nreason: " + reason +
                 "\nscreenOrientation: " + getResources().getConfiguration().orientation +
                 "\npiP: " + isInPipMode() +
@@ -292,7 +293,10 @@ public class PlaybackActivity extends LeanbackActivity {
                 "\nlastCompositedFrameAgoMs: " + (lastFrameMs > 0 ?
                         nowMs - lastFrameMs : -1) +
                 "\nrotationPending: " + mMobileRotationRecoveryPending +
-                "\ncarBrowserConnected: " + MobilePlaybackService.hasCarMediaBrowserClient();
+                "\ncarBrowserConnected: " + MobilePlaybackService.hasCarMediaBrowserClient() +
+                "\nscreenInteractive: " + isMobileScreenInteractive() +
+                "\nkeyguardLocked: " + isMobileKeyguardLocked() +
+                "\nlockRetained: " + mMobileScreenLockRetention;
     }
 
     private void captureMobileVideoDiagnostics(String reason) {
@@ -594,6 +598,8 @@ public class PlaybackActivity extends LeanbackActivity {
                 mPlaybackFragment.keepMobilePlaybackInBackground(true);
             }
         }
+        if (MobileUi.isHandheld(this) && isMobileLockInProgress())
+            captureMobileVideoDiagnostics("onStop-during-lock");
         super.onStop();
     }
     @Override
@@ -810,7 +816,10 @@ public class PlaybackActivity extends LeanbackActivity {
             // restrictions. Merely retaining the session NEVER calls play().
             mPlaybackFragment.keepMobilePlaybackInBackground(true);
             MobilePlaybackService.start(this);
-            if (isMobileLockInProgress()) mMobileScreenLockRetention = true;
+            if (isMobileLockInProgress()) {
+                mMobileScreenLockRetention = true;
+                captureMobileVideoDiagnostics("onPause-during-lock");
+            }
         }
         if (MobileUi.isHandheld(this) && mPlaybackFragment != null &&
                 MobileCarPlaybackPolicy.keepPausedSession(
