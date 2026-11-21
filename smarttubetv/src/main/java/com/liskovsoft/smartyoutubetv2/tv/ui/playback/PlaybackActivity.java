@@ -312,8 +312,11 @@ public class PlaybackActivity extends LeanbackActivity {
     void copyMobileVideoDiagnostics() {
         String previous = getSharedPreferences("soky_video_diagnostics", MODE_PRIVATE)
                 .getString("last", "No completed fullscreen transition recorded.");
+        String serviceEvent = getSharedPreferences("soky_video_diagnostics", MODE_PRIVATE)
+                .getString("last_service_event", "No media-service task-removal event captured.");
         String report = previous + "\n\n" +
-                mobileVideoDiagnosticsSnapshot("user-requested-current-state");
+                mobileVideoDiagnosticsSnapshot("user-requested-current-state") +
+                "\nlastMediaServiceEvent: " + serviceEvent;
         ClipboardManager manager = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         if (manager != null) {
             manager.setPrimaryClip(ClipData.newPlainText(
@@ -431,6 +434,7 @@ public class PlaybackActivity extends LeanbackActivity {
         mMobileAudioOnly = false;
         MobilePlaybackService.setExplicitAudioOnly(false);
         mMobilePipTransition = true;
+        MobilePlaybackService.setFloatingPlaybackExpected(true);
         mOpenBrowseAfterPip = browse;
         mBrowseLaunchedForPip = false;
         mPlaybackFragment.keepMobilePlaybackInBackground(true);
@@ -454,6 +458,7 @@ public class PlaybackActivity extends LeanbackActivity {
                         this::launchBrowseOncePipIsVisible, 650);
             } else {
                 mMobilePipTransition = false;
+                MobilePlaybackService.setFloatingPlaybackExpected(false);
                 mOpenBrowseAfterPip = false;
                 mPlaybackFragment.keepMobilePlaybackInBackground(false);
                 MobilePlaybackService.stop(this);
@@ -461,6 +466,7 @@ public class PlaybackActivity extends LeanbackActivity {
         } catch (IllegalStateException | IllegalArgumentException e) {
             Log.e(TAG, "Mobile PiP unavailable: " + e.getMessage());
             mMobilePipTransition = false;
+            MobilePlaybackService.setFloatingPlaybackExpected(false);
             mOpenBrowseAfterPip = false;
             mPlaybackFragment.keepMobilePlaybackInBackground(false);
             MobilePlaybackService.stop(this);
@@ -484,6 +490,7 @@ public class PlaybackActivity extends LeanbackActivity {
     private void stopClosedMobilePip() {
         if (mMobileAudioOnly || mPlaybackFragment == null) return;
         MobilePlaybackService.setExplicitAudioOnly(false);
+        MobilePlaybackService.setFloatingPlaybackExpected(false);
         mMobilePipSessionActive = false;
         mMobilePipTransition = false;
         mMobileAutoPipHandoffPending = false;
@@ -560,6 +567,7 @@ public class PlaybackActivity extends LeanbackActivity {
             // Expanded PiP returns to a resumed full-screen player. A dismissed
             // PiP does not resume the Activity; onStop instead stops the engine.
             if (!isInPipMode()) {
+                MobilePlaybackService.setFloatingPlaybackExpected(false);
                 mMobilePipSessionActive = false;
                 mMobilePipTransition = false;
                 mMobileAutoPipHandoffPending = false;
@@ -904,6 +912,7 @@ public class PlaybackActivity extends LeanbackActivity {
         if (MobileUi.isHandheld(this)) {
             if (isInPictureInPictureMode) {
                 mMobilePipSessionActive = true;
+                MobilePlaybackService.setFloatingPlaybackExpected(true);
                 mMobilePipTransition = false;
                 mMobileAutoPipHandoffPending = false;
                 if (mPlaybackFragment != null) {
@@ -967,6 +976,7 @@ public class PlaybackActivity extends LeanbackActivity {
                     // Prevent the PiP-dismissal path from pausing a still-playing
                     // video during the Android 12+ automatic PiP handoff.
                     mMobileAutoPipHandoffPending = true;
+                    MobilePlaybackService.setFloatingPlaybackExpected(true);
                     updateMobilePipParams(); // preserve the OS auto-enter animation
                     getWindow().getDecorView().postDelayed(() -> {
                         if (!mMobileAutoPipHandoffPending) return;

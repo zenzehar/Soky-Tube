@@ -38,6 +38,7 @@ public class BrowseActivity extends LeanbackActivity {
     private View mMobileMain;
     private TextView mMobileTitle;
     private MobileYouPage mMobileYou;
+    private MobileDiscoveryFeed mMobileDiscovery;
     private TextView mYouTabInitial;
     private ImageView mYouTabPicture;
     private MediaServiceManager.AccountChangeListener mAccountListener;
@@ -88,6 +89,11 @@ public class BrowseActivity extends LeanbackActivity {
         return fragment instanceof BrowseFragment ? (BrowseFragment) fragment : null;
     }
     private void showSections(View anchor) {
+        if (mMobileDiscovery != null && mMobileDiscovery.isShown()) {
+            hideDiscoveryPage();
+            if (mMobileBottomBar != null && mMobileBottomBar.getChildCount() > 0)
+                highlightMobileTab(mMobileBottomBar.getChildAt(0));
+        }
         BrowseFragment fragment = browseFragment();
         if (fragment != null) fragment.showMobileSections(anchor);
     }
@@ -141,6 +147,7 @@ public class BrowseActivity extends LeanbackActivity {
         mMobileBottomBar.setOrientation(LinearLayout.HORIZONTAL);
         mMobileBottomBar.setElevation(dp(4));
         addTab(R.drawable.mobile_ic_home, "Home", v -> selectHome());
+        addTab(R.drawable.mobile_ic_play, "Discover", v -> showDiscoveryPage());
         addTab(R.drawable.mobile_ic_play, "Shorts", v -> selectNamedSection("shorts", v));
         addTab(R.drawable.mobile_ic_library, "Subscriptions",
                 v -> selectNamedSection("subscription", v));
@@ -173,11 +180,19 @@ public class BrowseActivity extends LeanbackActivity {
                 FrameLayout.LayoutParams.MATCH_PARENT, Gravity.TOP);
         youParams.bottomMargin = dp(64);
         content.addView(mMobileYou.getView(), youParams);
+        mMobileDiscovery = new MobileDiscoveryFeed(this);
+        FrameLayout.LayoutParams discoverParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT, Gravity.TOP);
+        content.addView(mMobileDiscovery.getView(), discoverParams);
         mMobileToolbar.bringToFront();
         mMobileBottomBar.bringToFront();
         applyWindowSizing();
         if (mMobileBottomBar.getChildCount() > 0) highlightMobileTab(mMobileBottomBar.getChildAt(0));
-        mAccountListener = account -> runOnUiThread(this::updateYouTabAvatar);
+        mAccountListener = account -> runOnUiThread(() -> {
+            updateYouTabAvatar();
+            if (mMobileDiscovery != null) mMobileDiscovery.onAccountChanged();
+        });
         MediaServiceManager.instance().addAccountListener(mAccountListener);
         updateYouTabAvatar();
     }
@@ -274,6 +289,12 @@ public class BrowseActivity extends LeanbackActivity {
 
     @Override
     public void onBackPressed() {
+        if (mMobileDiscovery != null && mMobileDiscovery.isShown()) {
+            selectHome();
+            if (mMobileBottomBar != null && mMobileBottomBar.getChildCount() > 0)
+                highlightMobileTab(mMobileBottomBar.getChildAt(0));
+            return;
+        }
         if (mMobileYou != null && mMobileYou.isShown()) {
             selectHome();
             if (mMobileBottomBar != null && mMobileBottomBar.getChildCount() > 0)
@@ -285,8 +306,26 @@ public class BrowseActivity extends LeanbackActivity {
         super.onBackPressed();
     }
 
+    private void showDiscoveryPage() {
+        if (mMobileDiscovery == null) return;
+        hideYouPage();
+        if (mMobileMain != null) mMobileMain.setVisibility(View.GONE);
+        if (mMobileTitle != null) mMobileTitle.setText("Discover");
+        mMobileDiscovery.show();
+        applyWindowSizing();
+    }
+
+    private void hideDiscoveryPage() {
+        boolean wasShown = mMobileDiscovery != null && mMobileDiscovery.isShown();
+        if (mMobileDiscovery != null) mMobileDiscovery.hide();
+        if (wasShown && mMobileMain != null)
+            mMobileMain.setVisibility(View.VISIBLE);
+        if (mMobileTitle != null) mMobileTitle.setText("Soky Tube");
+    }
+
     private void showYouPage() {
         if (mMobileYou == null) return;
+        hideDiscoveryPage();
         updateYouTabAvatar();
         mMobileYou.show();
         if (mMobileMain != null) mMobileMain.setVisibility(View.GONE);
@@ -300,11 +339,13 @@ public class BrowseActivity extends LeanbackActivity {
         applyWindowSizing();
     }
     private void selectHome() {
+        hideDiscoveryPage();
         hideYouPage();
         BrowseFragment fragment = browseFragment();
         if (fragment != null) fragment.selectSection(0, true);
     }
     private boolean selectNamedSection(String label, View source) {
+        hideDiscoveryPage();
         BrowseFragment fragment = browseFragment();
         if (fragment != null && fragment.selectMobileSectionByName(label)) {
             hideYouPage();
@@ -328,6 +369,13 @@ public class BrowseActivity extends LeanbackActivity {
         fragmentParams.topMargin = header;
         fragmentParams.bottomMargin = footer;
         mMobileMain.setLayoutParams(fragmentParams);
+        if (mMobileDiscovery != null) {
+            FrameLayout.LayoutParams discover = (FrameLayout.LayoutParams)
+                    mMobileDiscovery.getView().getLayoutParams();
+            discover.topMargin = header;
+            discover.bottomMargin = footer;
+            mMobileDiscovery.getView().setLayoutParams(discover);
+        }
         if (mMobileYou != null) {
             FrameLayout.LayoutParams you = (FrameLayout.LayoutParams)
                     mMobileYou.getView().getLayoutParams();
@@ -351,6 +399,10 @@ public class BrowseActivity extends LeanbackActivity {
     }
 
     @Override protected void onDestroy() {
+        if (mMobileDiscovery != null) {
+            mMobileDiscovery.destroy();
+            mMobileDiscovery = null;
+        }
         if (mMobileYou != null) {
             mMobileYou.destroy();
             mMobileYou = null;

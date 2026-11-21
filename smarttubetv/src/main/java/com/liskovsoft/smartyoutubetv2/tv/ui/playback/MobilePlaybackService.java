@@ -43,6 +43,8 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     public static final String ACTION_NEXT = "com.sokytube.mobile.MEDIA_NEXT";
     public static final String ACTION_PREVIOUS = "com.sokytube.mobile.MEDIA_PREVIOUS";
     public static final String ACTION_STOP = "com.sokytube.mobile.MEDIA_STOP";
+    public static final String ACTION_SEEK_BACK_10 = "com.sokytube.mobile.SEEK_BACK_10";
+    public static final String ACTION_SEEK_FORWARD_10 = "com.sokytube.mobile.SEEK_FORWARD_10";
     private static final String CHANNEL_ID = "sokytube_mobile_media_controls_v2";
     private static final int NOTIFICATION_ID = 2037;
 
@@ -50,6 +52,8 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     private static MobilePlaybackService activeService;
     private static volatile boolean explicitAudioOnly;
     private static volatile boolean carMediaBrowserConnected;
+    // Set by Activity while Android animates into PiP or PiP is visible.
+    private static volatile boolean floatingPlaybackExpected;
 
     /**
      * A media browser from Android Auto may remain connected while the car
@@ -75,6 +79,19 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
 
     static void setExplicitAudioOnly(boolean allowed) {
         explicitAudioOnly = allowed;
+    }
+
+    static void setFloatingPlaybackExpected(boolean expected) {
+        floatingPlaybackExpected = expected;
+    }
+
+    private void recordMobileServiceEvent(String event) {
+        getSharedPreferences("soky_video_diagnostics", MODE_PRIVATE).edit()
+                .putString("last_service_event",
+                        android.os.SystemClock.elapsedRealtime() + "ms: " + event +
+                        " / floatingExpected=" + floatingPlaybackExpected +
+                        " / audioOnly=" + explicitAudioOnly +
+                        " / foreground=" + foreground).apply();
     }
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean foreground;
@@ -139,6 +156,7 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
      */
     public static void stop(Context context) {
         explicitAudioOnly = false;
+        floatingPlaybackExpected = false;
         if (activeService != null) activeService.stopForegroundAndSelf();
         else context.stopService(new Intent(context, MobilePlaybackService.class));
     }
@@ -314,10 +332,12 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     }
 
     @Override public void onTaskRemoved(Intent rootIntent) {
-        // Dismissing a floating window or removing the task must not orphan a
-        // playing notification. Explicit user-requested background AUDIO is
-        // the one exception, and remains available for car controls.
-        if (!explicitAudioOnly) {
+        // Android/OEM may report task removal while automatic PiP is entering
+        // or while the floating video remains visible. That callback is NOT
+        // equivalent to a user pressing Pause or dismissing PiP.
+        recordMobileServiceEvent("onTaskRemoved");
+        if (MobilePipServicePolicy.shouldPauseOnTaskRemoved(
+                explicitAudioOnly, floatingPlaybackExpected)) {
             if (sharedSession != null)
                 sharedSession.getController().getTransportControls().pause();
             stopForegroundAndSelf();
@@ -326,6 +346,7 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
     }
 
     @Override public void onDestroy() {
+        handler.removeCallbacksAndMessages(null);
         foreground = false;
         carMediaBrowserConnected = false;
         activeService = null;
