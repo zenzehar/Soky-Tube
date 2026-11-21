@@ -16,4 +16,12 @@ public class MobilePipServicePolicyTest {
     @Test public void explicitAudioBackgroundAlwaysRetained() {
         assertFalse(MobilePipServicePolicy.shouldPauseOnTaskRemoved(true, false));
     }
+    @Test public void carAudioNeverStopsOnPhoneTaskRemoval() {
+        assertFalse(MobilePipServicePolicy.shouldPauseOnTaskRemoved(
+                false, false, true));
+    }
+    @Test public void noCarNoPiPTaskDismissalStillStops() {
+        assertTrue(MobilePipServicePolicy.shouldPauseOnTaskRemoved(
+                false, false, false));
+    }
 }
