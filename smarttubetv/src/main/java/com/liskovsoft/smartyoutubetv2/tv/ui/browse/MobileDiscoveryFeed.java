@@ -45,6 +45,7 @@ final class MobileDiscoveryFeed {
     private List<Video> lastExplore = Collections.emptyList();
     private final ArrayList<Disposable> requests = new ArrayList<>();
     private boolean initialLoadCompleted;
+    private boolean openedOnce;
     private boolean inFlight;
     private boolean visible;
     private boolean destroyed;
@@ -91,7 +92,10 @@ final class MobileDiscoveryFeed {
         visible = true;
         root.setVisibility(View.VISIBLE);
         // No calls from onResume or onScroll; never reload populated content.
-        if (!initialLoadCompleted) fetch(false);
+        if (!openedOnce) {
+            openedOnce = true;
+            fetch(false); // one initial load; afterwards swipe-only
+        }
     }
 
     void hide() {
