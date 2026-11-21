@@ -21,6 +21,7 @@ on:
       - 'fix/mobile-v7-14-*'
       - 'fix/mobile-v7-15-*'
       - 'feature/mobile-v7-16-*'
+      - 'feature/mobile-v7-17-*'
   workflow_dispatch:
 
 concurrency:
@@ -89,9 +90,15 @@ jobs:
       - name: Test screen-lock playback continuity policy
         run: |
           ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileScreenLockPolicyTest"
-      - name: Test personalized News diversity and refresh
+      - name: Test general-interest Discover diversity and manual refresh only
         run: |
-          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileNewsMixerTest"
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileDiscoveryMixerTest" --tests "*MobileDiscoveryRefreshPolicyTest"
+      - name: Test minimize-to-PiP task removal protection
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobilePipServicePolicyTest"
+      - name: Test Android Auto exact 10-second seek boundaries
+        run: |
+          ./gradlew --no-daemon --stacktrace :smarttubetv:testStmobileDebugUnitTest --tests "*MobileCarSeekPolicyTest"
       - name: Build installable debug-signed mobile APK
         run: |
           ./gradlew --no-daemon --stacktrace assembleStmobileDebug
@@ -112,8 +119,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mobile-preview-v7-16-news-lock-20261121 dist/*.apk dist/SHA256SUMS.txt \
-            --title "Soky Tube Mobile v7.16 - Interest-Based News Refresh and Screen-Lock Retention (21 Nov 2026)" \
-            --notes "v7.16 mobile News only: refreshes News provider and reshuffles with diverse on-device interest weighting using watch history and subscribed channels, plus a capped mix from subscriptions and Home recommendations (70/20/10 target). Avoids repeats at the top when the candidate pool permits, with signed-out/provider-error fallbacks. The Home page remains identical. Screen lock: retain the current media session before the Activity pauses, avoid misidentifying a lock as PiP dismissal, and never override a user's intentional pause. Retains v7.15 Home-to-PiP and v7.14 Android 12+ PendingIntent fixes. Adds News mixer and lock-screen unit tests. This is a debug-signed preview; physical lock/PiP tests remain essential." \
+          gh release create mobile-preview-v7-17-discover-pull-only-auto-seek-20261121 dist/*.apk dist/SHA256SUMS.txt \
+            --title "Soky Tube Mobile v7.17 - Discover Pull Refresh, PiP Continuity & Android Auto 10s Seek (21 Nov 2026)" \
+            --notes "v7.17 introduces a separate general-interest Discover tab without changing the original Home or News pages. It mixes Home recommendations (60%), subscriptions (25%) and trends (15%) with on-device interests from recent watch history. Only an initial open fetches automatically; afterward only a user pull down from the feed top refreshes. Scrolling, returning, account callbacks and Activity.onResume do not refresh. Minimizing into PiP now protects the existing media session against spurious onTaskRemoved callbacks and records the cause in privacy-safe diagnostics while real PiP dismissal still stops audio. Android Auto gains custom Back 10 seconds and Forward 10 seconds controls with seek bounds; car hosts may put custom actions in the overflow menu. Retains prior screen-lock, Android Auto and Android 12 crash fixes. TV remains unchanged. Physical-device validation is required." \
             --prerelease --target "$GITHUB_SHA" \
-          || gh release upload mobile-preview-v7-16-news-lock-20261121 dist/*.apk dist/SHA256SUMS.txt --clobber
+          || gh release upload mobile-preview-v7-17-discover-pull-only-auto-seek-20261121 dist/*.apk dist/SHA256SUMS.txt --clobber
