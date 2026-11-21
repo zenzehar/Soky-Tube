@@ -163,6 +163,7 @@ android {
         // The existing stmobile APK, media session and TV builds remain unchanged.
         stcar {
             applicationId "com.sokytube.car"
+            minSdkVersion 28
             versionCode 2477
             versionName "32.87-soky-direct-car-probe"
             targetSdkVersion project.properties.compileSdkVersion
