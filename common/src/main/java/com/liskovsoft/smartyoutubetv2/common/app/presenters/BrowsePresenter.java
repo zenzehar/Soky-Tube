@@ -641,6 +641,22 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
         refresh(focusOnContent);
     }
 
+    /** Read-only discovery candidate fetches, isolated from the Home and
+     * native News section observables and their existing refresh behaviour. */
+    public Observable<List<MediaGroup>> getMobileDiscoveryRecommendations() {
+        return getContentService().getHomeObserve();
+    }
+
+    public Observable<MediaGroup> getMobileDiscoverySubscriptions() {
+        return getSignInService().isSigned()
+                ? getContentService().getSubscriptionsObserve()
+                : Observable.empty();
+    }
+
+    public Observable<List<MediaGroup>> getMobileDiscoveryExplore() {
+        return getContentService().getTrendingObserve();
+    }
+
     private void updateRefreshTime() {
         mLastUpdateTimeMs = System.currentTimeMillis();
     }
