@@ -27,6 +27,7 @@ import com.liskovsoft.smartyoutubetv2.tv.R;
 
 import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A service-owned, AUDIO-ONLY fallback used when Android Auto sends Play after
@@ -41,6 +42,7 @@ final class MobileCarAudioEngine {
     private final Context context;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final MediaSessionCompat session;
+    private final Runnable onFailed;
     private final Runnable checkpoint = new Runnable() {
         @Override public void run() {
             if (player == null || current == null) return;
@@ -58,9 +60,10 @@ final class MobileCarAudioEngine {
     private boolean released;
     private boolean loading;
 
-    MobileCarAudioEngine(Context context, MediaSessionCompat session) {
+    MobileCarAudioEngine(Context context, MediaSessionCompat session, Runnable onFailed) {
         this.context = context.getApplicationContext();
         this.session = session;
+        this.onFailed = onFailed;
     }
 
     boolean hasPreparedPlayer() { return player != null; }
@@ -81,6 +84,7 @@ final class MobileCarAudioEngine {
         formatLookup = YouTubeServiceManager.instance().getMediaItemService()
                 .getFormatInfoObserve(resume.videoId)
                 .take(1)
+                .timeout(20, TimeUnit.SECONDS)
                 .subscribeOn(Schedulers.io())
                 .subscribe(info -> main.post(() -> {
                     if (!released && generation == request) prepare(info, request);
@@ -173,6 +177,10 @@ final class MobileCarAudioEngine {
         Log.e(TAG, "Audio-only car resume failed: " + why);
         releasePlayer();
         loading = false;
+        // The media connector owns the session callback while attached.
+        // Restore the service callback so another Play tap can retry after
+        // a transient failed/expired YouTube stream lookup.
+        if (onFailed != null) onFailed.run();
         session.setPlaybackState(new PlaybackStateCompat.Builder()
                 .setState(PlaybackStateCompat.STATE_ERROR, 0, 0)
                 .setErrorMessage("Unable to resume audio; choose another video on your phone")
