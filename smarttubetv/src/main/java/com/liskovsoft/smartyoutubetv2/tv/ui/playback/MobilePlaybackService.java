@@ -50,6 +50,10 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
 
     private static MediaSessionCompat sharedSession;
     private static MobilePlaybackService activeService;
+    // Only one session owner at a time. A background car engine takes over
+    // after the phone fragment detaches and yields on its return.
+    private static volatile boolean fragmentSessionOwner;
+    private MobileCarAudioEngine carAudioEngine;
     private static volatile boolean explicitAudioOnly;
     private static volatile boolean carMediaBrowserConnected;
     // Set by Activity while Android animates into PiP or PiP is visible.
@@ -63,6 +67,26 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
      */
     static boolean hasCarMediaBrowserClient() {
         return carMediaBrowserConnected && activeService != null;
+    }
+
+    static void rememberPlayback(Context context,
+            com.liskovsoft.smartyoutubetv2.common.app.models.data.Video video,
+            long positionMs) {
+        if (video == null) return;
+        MobileCarResumeState.save(context, video.videoId, video.getTitle(),
+                video.getAuthor(), positionMs, video.incognito);
+    }
+
+    static synchronized void fragmentSessionAttached() {
+        fragmentSessionOwner = true;
+        if (activeService != null) activeService.releaseCarAudio();
+    }
+
+    private void releaseCarAudio() {
+        if (carAudioEngine != null) {
+            carAudioEngine.release();
+            carAudioEngine = null;
+        }
     }
 
     private static boolean isCarMediaBrowserClient(String packageName) {
@@ -122,12 +146,18 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
 
     static synchronized void detachMediaSession(MediaSessionCompat original) {
         if (original == null || sharedSession != original) return;
-        // The playback fragment owns the session. Stop any notification
-        // service first, then release this exact session only on detach.
-        if (activeService != null) activeService.stopForegroundAndSelf();
-        sharedSession.setActive(false);
-        sharedSession.release();
-        sharedSession = null;
+        fragmentSessionOwner = false;
+        // The phone UI has gone away, but the car can still ask to resume.
+        // Replace the fragment callback with the service's cold-resume
+        // callback rather than dropping the session/token and requiring an
+        // Activity/phone unlock.
+        if (activeService != null) {
+            activeService.installCarResumeCallback();
+        } else {
+            sharedSession.setActive(false);
+            sharedSession.release();
+            sharedSession = null;
+        }
     }
 
     public static void start(Context context) {
@@ -161,6 +191,97 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
         else context.stopService(new Intent(context, MobilePlaybackService.class));
     }
 
+    /** Car MediaBrowserService can be bound long after PlaybackActivity dies.
+     * Never wake or unlock the phone in order to satisfy the user's Play tap. */
+    private void installCarResumeCallback() {
+        if (fragmentSessionOwner || sharedSession == null) return;
+        MobileCarResumeState last = MobileCarResumeState.get(this);
+        if (last != null) {
+            sharedSession.setMetadata(new MediaMetadataCompat.Builder()
+                    .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, last.videoId)
+                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE,
+                            last.title.isEmpty() ? "Resume last video" : last.title)
+                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, last.artist)
+                    .build());
+        }
+        sharedSession.setPlaybackState(new PlaybackStateCompat.Builder()
+                .setState(PlaybackStateCompat.STATE_PAUSED,
+                        last != null ? last.positionMs : 0, 0)
+                .setActions(PlaybackStateCompat.ACTION_PLAY |
+                        PlaybackStateCompat.ACTION_PLAY_PAUSE |
+                        PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID |
+                        PlaybackStateCompat.ACTION_PAUSE)
+                .build());
+        sharedSession.setCallback(new MediaSessionCompat.Callback() {
+            @Override public void onPlay() {
+                resumeCarAudio();
+            }
+            @Override public void onPlayFromMediaId(String mediaId, Bundle extras) {
+                if (AUTO_NOW.equals(mediaId)) resumeCarAudio();
+            }
+            @Override public void onPause() {
+                if (carAudioEngine != null) carAudioEngine.pause();
+                else {
+                    MobileCarResumeState state = MobileCarResumeState.get(
+                            MobilePlaybackService.this);
+                    if (sharedSession != null)
+                        sharedSession.setPlaybackState(new PlaybackStateCompat.Builder()
+                                .setState(PlaybackStateCompat.STATE_PAUSED,
+                                        state != null ? state.positionMs : 0, 0)
+                                .setActions(PlaybackStateCompat.ACTION_PLAY |
+                                        PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID)
+                                .build());
+                }
+                refreshNotification();
+            }
+            @Override public void onStop() {
+                releaseCarAudio();
+                if (sharedSession != null)
+                    sharedSession.setPlaybackState(new PlaybackStateCompat.Builder()
+                            .setState(PlaybackStateCompat.STATE_STOPPED, 0, 0)
+                            .setActions(PlaybackStateCompat.ACTION_PLAY |
+                                    PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID)
+                            .build());
+                stopForegroundAndSelf();
+            }
+        }, handler);
+        sharedSession.setActive(true);
+        notifyChildrenChanged(AUTO_ROOT);
+    }
+
+    private void resumeCarAudio() {
+        if (sharedSession == null) return;
+        MobileCarResumeState resume = MobileCarResumeState.get(this);
+        if (!MobileCarResumePolicy.mayColdResume(
+                true, fragmentSessionOwner, resume != null)) {
+            if (fragmentSessionOwner) return;
+            sharedSession.setPlaybackState(new PlaybackStateCompat.Builder()
+                    .setState(PlaybackStateCompat.STATE_ERROR, 0, 0)
+                    .setErrorMessage("Start a video on your phone once to enable car resume")
+                    .setActions(PlaybackStateCompat.ACTION_PLAY)
+                    .build());
+            return;
+        }
+        // The car user explicitly tapped Play; binding or connecting alone
+        // never starts playback. Foreground promotion occurs during this tap.
+        try {
+            if (!foreground) {
+                startForeground(NOTIFICATION_ID, notification());
+                foreground = true;
+            }
+            if (carAudioEngine == null)
+                carAudioEngine = new MobileCarAudioEngine(this, sharedSession,
+                        this::installCarResumeCallback);
+            if (carAudioEngine.resume(resume)) {
+                recordMobileServiceEvent("car-play-cold-resume");
+                refreshNotification();
+            }
+        } catch (RuntimeException failure) {
+            android.util.Log.e("MobileMedia", "Car Play could not start service", failure);
+            recordMobileServiceEvent("car-play-foreground-rejected");
+        }
+    }
+
     private static PendingIntent actionIntent(Context context, String action, int request) {
         return PendingIntent.getService(context, request,
                 new Intent(context, MobilePlaybackService.class).setAction(action),
@@ -179,8 +300,9 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
             if (manager != null) manager.createNotificationChannel(channel);
         }
         setSessionToken(session(this).getSessionToken());
-        // Binding from Android Auto alone does not imply playback; only enter
-        // foreground state when an actual phone player starts the service.
+        if (!fragmentSessionOwner) installCarResumeCallback();
+        // Binding from Android Auto alone does not imply playback. Playback
+        // begins only from Play/PlayFromMediaId by the car or phone.
     }
 
     @Nullable @Override public BrowserRoot onGetRoot(@NonNull String clientPackageName,
@@ -203,6 +325,10 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
                 ? sharedSession.getController().getMetadata() : null;
         String title = metadata != null
                 ? metadata.getString(MediaMetadataCompat.METADATA_KEY_TITLE) : null;
+        MobileCarResumeState last = MobileCarResumeState.get(this);
+        if ((title == null || title.length() == 0) && last != null) {
+            title = last.title.isEmpty() ? "Resume last video" : last.title;
+        }
         if (title == null || title.length() == 0) {
             // The old service exposed an EMPTY root unless a phone video was
             // already active. Some Android Auto hosts reject that outright.
@@ -222,7 +348,9 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
                 new android.support.v4.media.MediaDescriptionCompat.Builder()
                     .setMediaId(AUTO_NOW)
                     .setTitle(title)
-                    .setSubtitle(metadata.getString(MediaMetadataCompat.METADATA_KEY_ARTIST))
+                    .setSubtitle(metadata != null ?
+                            metadata.getString(MediaMetadataCompat.METADATA_KEY_ARTIST) :
+                            last != null ? last.artist : "")
                     .build();
         result.sendResult(Collections.singletonList(new MediaBrowserCompat.MediaItem(item,
                 MediaBrowserCompat.MediaItem.FLAG_PLAYABLE)));
@@ -337,7 +465,8 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
         // equivalent to a user pressing Pause or dismissing PiP.
         recordMobileServiceEvent("onTaskRemoved");
         if (MobilePipServicePolicy.shouldPauseOnTaskRemoved(
-                explicitAudioOnly, floatingPlaybackExpected)) {
+                explicitAudioOnly, floatingPlaybackExpected,
+                carAudioEngine != null || carMediaBrowserConnected)) {
             if (sharedSession != null)
                 sharedSession.getController().getTransportControls().pause();
             stopForegroundAndSelf();
@@ -347,9 +476,16 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
 
     @Override public void onDestroy() {
         handler.removeCallbacksAndMessages(null);
+        releaseCarAudio();
         foreground = false;
         carMediaBrowserConnected = false;
         activeService = null;
+        if (!fragmentSessionOwner && sharedSession != null) {
+            sharedSession.setCallback(null);
+            sharedSession.setActive(false);
+            sharedSession.release();
+            sharedSession = null;
+        }
         // Do not release the media session here: Android may stop a service
         // while the fragment's player is still alive. Session ownership and
         // cleanup belong to detachMediaSession().

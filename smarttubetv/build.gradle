@@ -162,8 +162,8 @@ android {
         stmobile {
             // Independent install: never overwrites an existing SmartTube TV installation.
             applicationId "com.sokytube.mobile"
-            versionCode 2475
-            versionName "32.85-soky-v7.17-discover-auto-seek"
+            versionCode 2476
+            versionName "32.86-soky-v7.18-car-cold-resume"
             targetSdkVersion project.properties.compileSdkVersion
             matchingFallbacks = ["stbeta"]
         }
