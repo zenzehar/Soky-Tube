@@ -4,8 +4,9 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
-import android.view.Surface;
+import android.os.Build;
 import android.util.Log;
+import android.view.Surface;
 
 import androidx.annotation.NonNull;
 import androidx.car.app.AppManager;
@@ -23,31 +24,33 @@ import androidx.lifecycle.LifecycleEventObserver;
 import java.util.Locale;
 
 /**
- * Static SurfaceCallback experiment. No video, audio, internet, stream URL,
- * media decoder, mirroring, or car-state spoofing is used.
+ * Diagnostic-only drawing test on the surface confirmed to work at 1202x462.
  *
- * A working PaneTemplate proves CarAppService discovery but NOT that this
- * head unit exposes a drawing Surface. The full-screen test pattern below
- * distinguishes the two capabilities.
- *
- * CAUTION: NavigationTemplate Surface is officially meant for map rendering.
- * It is not approval for a YouTube video app. Do NOT use the surface for
- * video or publish this probe as a navigation app.
+ * This is NOT a video output or a navigation product. NavigationTemplate's
+ * surface is reserved for map graphics by Android Auto app quality policy.
+ * No media decoder or unverified parked-state inference is connected here.
  */
 final class SokyCarSurfaceProbeScreen extends Screen implements SurfaceCallback {
     private static final String TAG = "SokyCarSurfaceProbe";
+    private final AppManager appManager;
     private Surface currentSurface;
     private Rect visibleArea;
+    private Rect stableArea;
     private String status = "Waiting for Android Auto surface";
 
     SokyCarSurfaceProbeScreen(@NonNull CarContext context) {
         super(context);
-        AppManager manager = context.getCarService(AppManager.class);
-        manager.setSurfaceCallback(this);
+        appManager = context.getCarService(AppManager.class);
         getLifecycle().addObserver((LifecycleEventObserver) (source, event) -> {
-            if (event == Lifecycle.Event.ON_DESTROY) {
-                manager.setSurfaceCallback(null);
-                currentSurface = null;
+            if (event == Lifecycle.Event.ON_START) {
+                // The screen owns the callback only while it is being shown.
+                appManager.setSurfaceCallback(this);
+            } else if (event == Lifecycle.Event.ON_STOP ||
+                    event == Lifecycle.Event.ON_DESTROY) {
+                appManager.setSurfaceCallback(null);
+                currentSurface = null;  // Host owns and releases its Surface.
+                visibleArea = null;
+                stableArea = null;
             }
         });
     }
@@ -70,33 +73,39 @@ final class SokyCarSurfaceProbeScreen extends Screen implements SurfaceCallback 
     public void onSurfaceAvailable(@NonNull SurfaceContainer container) {
         currentSurface = container.getSurface();
         visibleArea = null;
-        Log.i(TAG, "Car Surface available: " + container.getWidth()
-                + " x " + container.getHeight());
+        stableArea = null;
         status = "CAR SURFACE AVAILABLE";
+        Log.i(TAG, "Diagnostic Surface available: " + container.getWidth()
+                + " x " + container.getHeight() + "; video gate blocked");
         drawDiagnosticFrame();
     }
 
     @Override
-    public void onVisibleAreaChanged(@NonNull Rect visibleArea) {
-        this.visibleArea = new Rect(visibleArea);
+    public void onVisibleAreaChanged(@NonNull Rect area) {
+        visibleArea = new Rect(area);
         drawDiagnosticFrame();
     }
 
     @Override
-    public void onStableAreaChanged(@NonNull Rect stableArea) {
-        if (visibleArea == null) visibleArea = new Rect(stableArea);
+    public void onStableAreaChanged(@NonNull Rect area) {
+        stableArea = new Rect(area);
         drawDiagnosticFrame();
     }
 
     @Override
     public void onSurfaceDestroyed(@NonNull SurfaceContainer container) {
-        Log.i(TAG, "Car Surface destroyed");
-        currentSurface = null;
+        Log.i(TAG, "Diagnostic Surface destroyed");
+        if (currentSurface == container.getSurface()) {
+            currentSurface = null;
+            status = "Surface disconnected";
+        }
     }
 
     private void drawDiagnosticFrame() {
         Surface surface = currentSurface;
-        if (surface == null || !surface.isValid()) return;
+        if (surface == null || !surface.isValid()) {
+            return;
+        }
         Canvas canvas = null;
         try {
             canvas = surface.lockCanvas(null);
@@ -104,42 +113,54 @@ final class SokyCarSurfaceProbeScreen extends Screen implements SurfaceCallback 
 
             int width = canvas.getWidth();
             int height = canvas.getHeight();
-            Rect area = visibleArea;
-            float cx = area == null ? width / 2f : area.centerX();
-            float cy = area == null ? height / 2f : area.centerY();
-            float minDimension = Math.max(1f, Math.min(width, height));
+            Rect bounds = new Rect(0, 0, width, height);
+            Rect preferred = visibleArea != null ? visibleArea : stableArea;
+            if (preferred != null && !bounds.intersect(preferred)) {
+                bounds.set(0, 0, width, height);
+            }
+            float cx = bounds.exactCenterX();
+            float cy = bounds.exactCenterY();
+            float unit = Math.max(1f, Math.min(bounds.width(), bounds.height()));
 
             Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.rgb(18, 199, 157));
-            canvas.drawRoundRect(cx - minDimension * .20f, cy - minDimension * .29f,
-                    cx + minDimension * .20f, cy - minDimension * .12f,
-                    minDimension * .03f, minDimension * .03f, paint);
+            canvas.drawRoundRect(cx - unit * .19f, cy - unit * .32f,
+                    cx + unit * .19f, cy - unit * .19f,
+                    unit * .025f, unit * .025f, paint);
 
             paint.setColor(Color.WHITE);
             paint.setTextAlign(Paint.Align.CENTER);
             paint.setTypeface(android.graphics.Typeface.create(
                     "sans-serif", android.graphics.Typeface.BOLD));
-            paint.setTextSize(Math.max(18f, minDimension * .050f));
-            canvas.drawText(status, cx, cy - minDimension * .01f, paint);
+            paint.setTextSize(Math.max(18f, unit * .046f));
+            canvas.drawText(status, cx, cy - unit * .07f, paint);
 
             paint.setTypeface(android.graphics.Typeface.DEFAULT);
-            paint.setTextSize(Math.max(15f, minDimension * .033f));
-            canvas.drawText("Soky Tube native rendering test", cx,
-                    cy + minDimension * .08f, paint);
-            canvas.drawText("No video enabled", cx,
-                    cy + minDimension * .15f, paint);
+            paint.setTextSize(Math.max(15f, unit * .032f));
+            canvas.drawText("Soky Car native surface diagnostics", cx,
+                    cy + unit * .015f, paint);
             canvas.drawText(String.format(Locale.US,
-                    "Surface: %d x %d", width, height),
-                    cx, cy + minDimension * .22f, paint);
+                    "Surface: %d x %d | Android API: %d",
+                    width, height, Build.VERSION.SDK_INT),
+                    cx, cy + unit * .095f, paint);
+
+            // Every frame explicitly exposes fail-closed video state.
+            // Even a working Surface is not parked-video authorisation.
+            paint.setColor(Color.rgb(255, 189, 124));
+            canvas.drawText(SokyCarPlaybackGate.diagnosticState(),
+                    cx, cy + unit * .18f, paint);
+            paint.setTextSize(Math.max(13f, unit * .027f));
+            canvas.drawText(SokyCarPlaybackGate.blockReason(),
+                    cx, cy + unit * .25f, paint);
         } catch (RuntimeException error) {
-            Log.e(TAG, "Android Auto Surface canvas was not drawable", error);
+            Log.e(TAG, "Android Auto diagnostic Surface not drawable", error);
         } finally {
             if (canvas != null) {
                 try {
                     surface.unlockCanvasAndPost(canvas);
                 } catch (RuntimeException error) {
-                    Log.e(TAG, "Surface post failed", error);
+                    Log.e(TAG, "Diagnostic Surface post failed", error);
                 }
             }
         }

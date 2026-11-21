@@ -1,74 +1,102 @@
-# Soky Tube Android 12 car surface test
+# Soky Tube Car: Android 12 native surface and safety audit
 
-## Confirmed result from real vehicle (21 November 2026)
+## Confirmed on the real head unit (21 November 2026)
 
-The native `Soky Tube Car - Compatibility Test` Android Auto
-`PaneTemplate` appeared on the user's vehicle head unit, displaying:
+The Huawei Pura 70 Ultra, running EMUI 14.2 (Android 12 base), successfully:
+- discovered and launched **Soky Tube (Car)** in the Android Auto launcher;
+- rendered the native `CarAppService` / `PaneTemplate`;
+- showed the teal diagnostic pattern on the host Surface at **1202 x 462** pixels.
 
-- "Soky Tube connected"
-- "Car display interface detected"
-- "Video not enabled yet"
+Therefore launcher registration and Canvas surface access have passed real-device tests.
+These results **do not** establish that Android Auto supports video playback
+through a navigation template.
 
-This confirms discovery, launch and rendering of a **host template** on the
-Huawei Pura 70 Ultra / EMUI 14.2 (Android 12 base). It does NOT demonstrate
-a direct video rendering surface or Android Auto video policy approval.
+Stable proven fallback: **v32.88**, branch
+`experiment/soky-car-surface-check-20261121` / PR #24.
 
-## Phase two: static SurfaceCallback test
+## Current implementation: v32.89 Safety Audit
 
-This experimental source branch uses Soky Tube's own `CarAppService`, no
-external app or mirroring player.
+Branch: `experiment/soky-car-safety-audit-20261121`
 
-The `Surface Test` action on the original safe screen pushes a
-`NavigationTemplate` and registers `SurfaceCallback` through `AppManager`.
-If the host grants surface access, the app draws a teal rectangle, and:
+This branch extends ONLY the independently installable `stcar` flavor
+(package `com.sokytube.car`; build 2479), not the original mobile player
+(package `com.sokytube.mobile`).
 
-- `CAR SURFACE AVAILABLE`
-- `Soky Tube native rendering test`
-- `No video enabled`
-- the surface resolution
+Changes:
+1. Displays the already confirmed car display result in the home Pane.
+2. Renames the action to **Surface Diagnostics**.
+3. Displays the real Surface size and device Android API level dynamically.
+4. Introduces `SokyCarPlaybackGate`: no video render permission is granted;
+   lack of a trusted parked-state signal always blocks visual playback.
+5. Diagnostic Surface registration is scoped to the visible screen lifecycle;
+   it is unregistered on stop/destroy and host-owned Surface objects are never
+   released by the app.
+6. Keeps English-only diagnostic UI, existing mobile audio playback, and
+   separate app identities. No media decoder, external player or mirroring tool
+   is added to the car flavor.
 
-The template has an explicit BACK action. The callback is detached when
-the screen is destroyed. There is no media pipeline, decoder, playback,
-GPS-location access, speed spoofing or driving-state override.
+## Why the car video toggle is not yet enabled
 
-Important: a navigation-category surface is documented for drawing maps
-and is *not* a supported way to publish general video streaming apps.
-This is a developer-only, local compatibility probe.
+As of 21 November 2026, Google documents that **Android Auto** supports
+direct parked app Activities only on Android 15+ and presently supports
+**games** as its parked app category. A navigation `SurfaceCallback`
+is for drawing map graphics, NOT a video display surface. A trustworthy
+"parked" authorisation is not available through this existing experiment.
+Speed=0, lack of GPS movement, manual toggle and developer/unknown-sources
+settings are not equivalent to host-enforced driver-distraction restrictions.
 
-## Install
+Official references:
+- https://developer.android.com/training/cars/parked/auto
+- https://developer.android.com/docs/quality-guidelines/car-app-quality
+- https://developer.android.com/training/cars/platforms/android-auto
 
-Download the `SokyTube-Android12-Surface-Check` ZIP artifact from the
-successful `Soky Tube native Android Auto car probe APK` GitHub Actions
-run on `experiment/soky-car-surface-check-20261121`.
-Extract `SokyTube_Car_Surface_arm64.apk` and install it as an update to
-the previous `com.sokytube.car` package.
+There is **no video decoder** wired to this Surface in v32.89.
+This branch is only an isolated development compatibility diagnostic; do not
+distribute it as a navigation app. Do not use it while driving.
 
-If the update fails with a signature mismatch (CI debug signing may differ
-between builds), uninstall **Soky Tube (Car)** only, then install the new
-APK. Do not uninstall `Soky Tube` mobile package. This test package has
-no saved login state by design.
+## Download and install v32.89
 
-Park safely, reconnect Android Auto, open Soky Tube (Car), select
-`Surface Test`, and report:
+Open GitHub Actions > **Soky Tube native Android Auto car probe APK** on
+`experiment/soky-car-safety-audit-20261121`. After a successful run, download
+`SokyTube-Android12-Safety-Audit` and extract
+`SokyTube_Car_Audit_arm64.apk` (or the universal APK). Check
+`SHA256SUMS.txt` if needed.
 
-1. Does the normal `Soky Tube connected` screen still appear?
-2. Is the new `Surface Test` button visible?
-3. After tapping it, is a dark full-screen test image with a **teal box**
-   shown (not just the Android Auto background or spinner)?
-4. Can you use BACK to return?
-5. Does the original Soky Tube audio card continue working?
+This APK updates only `com.sokytube.car`. If Android rejects the update
+because the CI debug certificate changed, uninstall **Soky Tube (Car)** only;
+do **not** uninstall the separate Soky Tube mobile app. The car diagnostic
+flavor deliberately contains no account/login state.
 
-For failures, inspect `adb logcat -s SokyCarSurfaceProbe AndroidRuntime`
-and redact device/account identifiers before sharing.
+## Manual parked test matrix
 
-## Next engineering gate
+1. With the vehicle safely parked, reconnect Android Auto; verify the
+   **Soky Tube (Car) - Safety Audit** launcher entry is available.
+2. Open Soky Tube Car. Verify **Surface confirmed on car display** and
+   **Video gate: BLOCKED**; no playable video controls should appear.
+3. Tap **Surface Diagnostics** and verify the teal marker, English-only text,
+   size (1202 x 462 on the tested head unit), Android API, and **VIDEO BLOCKED**.
+4. Press BACK and reopen the diagnostic several times; check for crashes,
+   frozen Canvas, or loss of the Android Auto launcher.
+5. Disconnect and reconnect Android Auto; verify Surface re-registration.
+6. Confirm ordinary Soky Tube mobile Android Auto audio still works,
+   including play/pause and +10s/-10s commands.
+7. Leave v32.88 available as the proven rollback if any of these regress.
 
-Even if a Surface is provided, video streaming must be gated to a **real
-host-verified parked state**, with video hidden whenever vehicle state is
-moving or unknown. This can be tricky on projected Android Auto on
-Android 12 and cannot safely be inferred from GPS speed alone.
+If problems occur, capture (while parked):
+`adb logcat -d -s SokyCarSurfaceProbe AndroidRuntime CarAppService`
+Redact any personal/device identifiers before sharing.
 
-Only after surface support AND safe parked-state controls have been
-confirmed should we attach a video renderer to the existing Soky Tube
-media resolver, establish one player owner, and perform playback, surface
-lifecycle and transport tests. This branch does not claim to enable video.
+## Engineering gate before any car video renderer
+
+- Support an **official video app category and host-verified parked UX**;
+  do not re-purpose navigation map content.
+- Use the host's actual driving UX restriction callback. Immediately remove
+  video from display when restrictions activate or state becomes unknown.
+- Retain audio-only controls as permitted and test lock/reconnect behaviour
+  independently in the mobile media service.
+- Only THEN connect the existing Soky Tube media resolver to an appropriate
+  parked video Activity/Surface with one playback owner, surface lifecycle
+  handling and automated regression tests.
+
+Until those gates are satisfied, `SokyCarPlaybackGate.canRenderCarVideo()`
+must return `false`, and **the car screen must not show video**.
