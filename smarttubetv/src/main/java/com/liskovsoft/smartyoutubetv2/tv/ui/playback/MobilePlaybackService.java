@@ -270,7 +270,8 @@ public final class MobilePlaybackService extends MediaBrowserServiceCompat {
                 foreground = true;
             }
             if (carAudioEngine == null)
-                carAudioEngine = new MobileCarAudioEngine(this, sharedSession);
+                carAudioEngine = new MobileCarAudioEngine(this, sharedSession,
+                        this::installCarResumeCallback);
             if (carAudioEngine.resume(resume)) {
                 recordMobileServiceEvent("car-play-cold-resume");
                 refreshNotification();
