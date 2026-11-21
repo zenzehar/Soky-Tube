@@ -112,8 +112,8 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
         mMobileFeed = new MobileVideoFeed(requireContext(), video -> {
             if (mMainPresenter != null) mMainPresenter.onVideoItemClicked(video);
         }, true);
-        mMobileNews = BrowsePresenter.instance(requireContext()).getCurrentSection() != null &&
-                BrowsePresenter.instance(requireContext()).getCurrentSection().getId() == MediaGroup.TYPE_NEWS;
+        // Assigned from the selected section header by the fragment factory;
+        // the presenter can still point to the previous section during creation.
         if (mMobileNews) mMobileFeed.enablePersonalizedNews();
         mMobileFeed.setBottomInsetDp(16);
         mMobileFeed.setOnRefresh(() -> {
@@ -193,6 +193,11 @@ public abstract class MultipleRowsFragment extends RowsSupportFragment implement
 
     protected void addHeader(ChannelHeaderCallback callback) {
         mChannelHeaderCallback = callback;
+    }
+
+    /** Called before view creation; avoids a selection-change race with Home. */
+    public void setMobileNewsSection(boolean news) {
+        mMobileNews = news;
     }
 
     protected abstract VideoGroupPresenter getMainPresenter();
